@@ -336,12 +336,11 @@ if candidates_df is not None and requirements_df is not None:
         # Select candidates to compare from shortlist
         shortlisted_names = list(set(st.session_state["shortlist"]))
         
-        st.markdown("Select 2 to 3 candidates from your shortlist to analyze side-by-side:")
+        st.markdown("Select candidates from your shortlist to analyze side-by-side:")
         selected_candidates = st.multiselect(
             "Select Candidates",
             options=shortlisted_names,
-            default=shortlisted_names[:3] if len(shortlisted_names) >= 2 else None,
-            max_selections=3
+            default=shortlisted_names
         )
         
         if len(selected_candidates) < 2:
