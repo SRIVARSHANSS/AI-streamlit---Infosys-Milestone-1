@@ -7,7 +7,7 @@ import textwrap
 # 1. Must call set_page_config as the first Streamlit command
 st.set_page_config(
     page_title="AI Recruitment & Talent Copilot",
-    page_icon="💼",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -29,10 +29,10 @@ def load_csv_data(filepath):
         if os.path.exists(filepath):
             return pd.read_csv(filepath)
         else:
-            st.error(f"⚠️ Critical Error: Data file '{filepath}' is missing from the disk.")
+            st.error(f"Critical Error: Data file '{filepath}' is missing from the disk.")
             return None
     except Exception as e:
-        st.error(f"⚠️ Error reading '{filepath}': {e}")
+        st.error(f"Error reading '{filepath}': {e}")
         return None
 
 # Load dataset
@@ -172,7 +172,7 @@ with col_logo:
     if os.path.exists("assets/company_logo.png"):
         st.image("assets/company_logo.png", width=110)
     else:
-        st.write("🏢 [Logo Placeholder]")
+        st.write("[Logo Placeholder]")
 
 with col_title:
     st.markdown(
@@ -189,7 +189,7 @@ with col_title:
 if candidates_df is not None and requirements_df is not None:
     
     # 2. Sidebar Filters
-    st.sidebar.markdown("### 🔍 Target Job Role")
+    st.sidebar.markdown("### Target Job Role")
     roles = requirements_df["Role"].tolist()
     selected_role = st.sidebar.selectbox("Select Target Position", roles)
     
@@ -199,7 +199,7 @@ if candidates_df is not None and requirements_df is not None:
     min_experience = int(role_req["Min_Experience"])
     
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🛠️ Filter Candidate Pool")
+    st.sidebar.markdown("### Filter Candidate Pool")
     
     # Get unique list of all skills across candidates for filtering
     all_skills = set()
@@ -215,7 +215,7 @@ if candidates_df is not None and requirements_df is not None:
     
     st.sidebar.markdown("---")
     # Quick reset shortlist button
-    st.sidebar.markdown("### 📋 Shortlist Control")
+    st.sidebar.markdown("### Shortlist Control")
     if st.sidebar.button("Clear Candidate Shortlist", use_container_width=True):
         st.session_state["shortlist"] = []
         st.sidebar.success("Shortlist cleared!")
@@ -259,9 +259,9 @@ if candidates_df is not None and requirements_df is not None:
         
     # 3. Main tab layout
     tab_pool, tab_explain, tab_bias = st.tabs([
-        "📊 Candidate Pool", 
-        "🕸️ Comparison & Explainability", 
-        "⚖️ Bias & Fairness Audit"
+        "Candidate Pool", 
+        "Comparison & Explainability", 
+        "Bias & Fairness Audit"
     ])
     
     # ------------------ TAB 1: CANDIDATE POOL ------------------
@@ -344,7 +344,7 @@ if candidates_df is not None and requirements_df is not None:
         )
         
         if len(selected_candidates) < 2:
-            st.info("⚠️ Please shortlist and select at least 2 candidates in the multiselect above to generate the radar comparison and explainability ledger.")
+            st.info("Please shortlist and select at least 2 candidates in the multiselect above to generate the radar comparison and explainability ledger.")
         else:
             # 1. Plotly radar chart logic
             radar_data = []
@@ -403,7 +403,7 @@ if candidates_df is not None and requirements_df is not None:
             
             # 2. Explainability Ledger
             st.markdown("---")
-            st.markdown("### 📑 Explainability Ledger")
+            st.markdown("### Explainability Ledger")
             st.write("Plain-language reasoning trail showing exactly how and why each candidate achieved their score:")
             
             for name in selected_candidates:
@@ -453,7 +453,7 @@ if candidates_df is not None and requirements_df is not None:
                 
     # ------------------ TAB 3: BIAS & FAIRNESS AUDIT ------------------
     with tab_bias:
-        st.markdown("### ⚖️ Bias & Fairness Audit Panel")
+        st.markdown("### Bias & Fairness Audit Panel")
         st.markdown("This panel monitors candidate shortlisting choices for experience-based concentration, helping ensure a diverse pipeline.")
         
         shortlisted_candidates = candidates_df_calc[candidates_df_calc["Name"].isin(st.session_state["shortlist"])]
@@ -540,7 +540,7 @@ if candidates_df is not None and requirements_df is not None:
                 if skewed_band:
                     st.warning(
                         textwrap.dedent(f"""
-                            ⚠️ **Potential Shortlist Skew Detected!**
+                            **Potential Shortlist Skew Detected!**
                             
                             The experience band **{skewed_band}** represents **{skew_pct:.1f}%** of your shortlist, which exceeds the recommended 70% threshold.
                             
@@ -551,14 +551,14 @@ if candidates_df is not None and requirements_df is not None:
                 else:
                     st.success(
                         textwrap.dedent(f"""
-                            ✅ **Shortlist Diversity Check Passed**
+                            **Shortlist Diversity Check Passed**
                             
                             No single experience band exceeds the 70% concentration limit. The shortlist represents a healthy, balanced spread of experience levels.
                         """)
                     )
                     
         st.markdown("")
-        st.caption("ℹ️ **Fairness Auditor Note:** This tool evaluates simple statistical distribution skews on selected parameters. It is a rule-based heuristic check intended for decision support, not an automated legal fairness/ML audit.")
+        st.caption("**Fairness Auditor Note:** This tool evaluates simple statistical distribution skews on selected parameters. It is a rule-based heuristic check intended for decision support, not an automated legal fairness/ML audit.")
         
 else:
     st.error("Please configure the CSV data files under the `data/` folder to run the Recruitment Copilot.")
