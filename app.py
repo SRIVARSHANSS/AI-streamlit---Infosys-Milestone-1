@@ -20,6 +20,825 @@ def safe_rerun():
     except AttributeError:
         st.experimental_rerun()
 
+# ==========================================
+# WORKSPACE PAGE RENDERING FUNCTIONS
+# ==========================================
+
+def render_landing_page(candidates_df, requirements_df):
+    st.markdown("### 🏢 Enterprise Talent Command Center")
+    st.markdown("Welcome to the **AI Recruitment & Talent Copilot**. This dashboard aggregates recruitment performance metrics, candidate analytics, automated screening logs, and onboarding progression.")
+    
+    # KPIs Row
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(
+            f'<div class="audit-metric-card">'
+            f'<div class="audit-number">{len(candidates_df)}</div>'
+            f'<div class="audit-label">Total Applicants</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+    with col2:
+        st.markdown(
+            f'<div class="audit-metric-card">'
+            f'<div class="audit-number" style="color:#10b981;">{len(requirements_df)}</div>'
+            f'<div class="audit-label">Job Openings</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+    with col3:
+        st.markdown(
+            f'<div class="audit-metric-card">'
+            f'<div class="audit-number" style="color:#3b82f6;">{len(st.session_state["interviews"])}</div>'
+            f'<div class="audit-label">Interviews Scheduled</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+    with col4:
+        st.markdown(
+            f'<div class="audit-metric-card">'
+            f'<div class="audit-number" style="color:#a78bfa;">{len(st.session_state["onboarding_db"])}</div>'
+            f'<div class="audit-label">Onboarding Pipelines</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+        
+    st.write("")
+    
+    # Call-to-action Shortcuts
+    st.markdown("#### ⚡ Quick Actions Dashboard")
+    
+    col_c1, col_c2, col_c3 = st.columns(3)
+    
+    with col_c1:
+        st.markdown(
+            """
+            <div style="background-color: #1e293b; padding: 1.2rem; border-radius: 10px; border: 1px solid #334155; height: 180px;">
+                <h5 style="color: #60a5fa; margin: 0 0 0.5rem 0; font-family: Sora;">Resume Center</h5>
+                <p style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.4;">Upload a candidate's resume and parse skills, experience, and certifications automatically using our simulated parser.</p>
+            </div>
+            """, unsafe_allow_html=True
+        )
+        if st.button("Go to Resume Uploader", key="go_upload", use_container_width=True):
+            st.session_state["nav_option"] = "Resume Upload Page"
+            safe_rerun()
+            
+    with col_c2:
+        st.markdown(
+            """
+            <div style="background-color: #1e293b; padding: 1.2rem; border-radius: 10px; border: 1px solid #334155; height: 180px;">
+                <h5 style="color: #34d399; margin: 0 0 0.5rem 0; font-family: Sora;">Job Architect</h5>
+                <p style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.4;">Generate industry-compliant job descriptions instantly and insert them directly into the recruitment matching system.</p>
+            </div>
+            """, unsafe_allow_html=True
+        )
+        if st.button("Go to JD Generator", key="go_jd", use_container_width=True):
+            st.session_state["nav_option"] = "AI Job Description Generator"
+            safe_rerun()
+            
+    with col_c3:
+        st.markdown(
+            """
+            <div style="background-color: #1e293b; padding: 1.2rem; border-radius: 10px; border: 1px solid #334155; height: 180px;">
+                <h5 style="color: #a78bfa; margin: 0 0 0.5rem 0; font-family: Sora;">Assessment Suite</h5>
+                <p style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.4;">Compare shortlisted candidates, inspect AI matching criteria trails, and view active bias audits.</p>
+            </div>
+            """, unsafe_allow_html=True
+        )
+        if st.button("Go to Assessments", key="go_assess", use_container_width=True):
+            st.session_state["nav_option"] = "Candidate Assessment Suite"
+            safe_rerun()
+            
+    st.write("")
+    st.markdown("---")
+    st.markdown("#### 📢 Recent Platform Notifications")
+    for n in st.session_state["notifications"][:3]:
+        read_dot = "🔵" if not n["Read"] else "⚪"
+        st.markdown(f"{read_dot} **{n['Message']}** ({n['Time']})")
+
+def render_candidate_portal(requirements_df):
+    st.markdown("### 📝 Candidate Application Portal")
+    st.markdown("Submit your application details below to apply for positions directly. The AI copilot will evaluate your profile against current requisitions.")
+    
+    with st.form("candidate_app_form", clear_on_submit=True):
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            name = st.text_input("Full Name", placeholder="e.g. Harish Kumar")
+            email = st.text_input("Email Address", placeholder="e.g. harish@example.com")
+        with col_f2:
+            roles = requirements_df["Role"].tolist()
+            applied_role = st.selectbox("Target Position", roles)
+            experience = st.slider("Years of Experience", 0, 15, 2)
+            
+        skills_input = st.text_area("Key Skills (comma-separated)", placeholder="e.g. Python, SQL, Git, AWS")
+        resume_summary = st.text_area("Profile Summary", placeholder="Brief description of your professional achievements...")
+        
+        submitted = st.form_submit_button("Submit Application", type="primary")
+        
+        if submitted:
+            if not name.strip() or not skills_input.strip():
+                st.error("Please enter your name and at least one skill to proceed.")
+            else:
+                new_cand = {
+                    "Name": name.strip(),
+                    "Role Applied": applied_role,
+                    "Skills": skills_input.strip(),
+                    "Experience_Years": float(experience),
+                    "Match_Score": 0,
+                    "Status": "Applied"
+                }
+                st.session_state["candidates_db"].append(new_cand)
+                st.session_state["notifications"].insert(0, {
+                    "Message": f"New application received from {name.strip()} for {applied_role}",
+                    "Time": "Just now",
+                    "Read": False
+                })
+                st.success(f"Thank you, {name}! Your application for **{applied_role}** has been submitted successfully.")
+
+def render_resume_upload(requirements_df):
+    st.markdown("### 📤 AI Resume Parser & Upload")
+    st.markdown("Upload resumes to automatically extract keywords, skills, and experience metrics to create candidate profiles.")
+    
+    uploaded_file = st.file_uploader("Choose a Resume file", type=["pdf", "txt", "docx"])
+    
+    if uploaded_file is not None:
+        st.info(f"File uploaded: **{uploaded_file.name}**")
+        
+        progress_bar = st.progress(0)
+        import time
+        for percent_complete in range(100):
+            time.sleep(0.005)
+            progress_bar.progress(percent_complete + 1)
+            
+        st.success("✅ AI parsing complete! Extracted structural candidates parameters.")
+        
+        fn = uploaded_file.name.lower()
+        if "arun" in fn:
+            p_name, p_skills, p_exp, p_role = "Arun", "Python, SQL, Git, Docker, Communication", 4, "Software Engineer"
+        elif "divya" in fn:
+            p_name, p_skills, p_exp, p_role = "Divya", "Python, React, JavaScript, HTML, CSS", 2, "Software Engineer"
+        else:
+            p_name = uploaded_file.name.split(".")[0].replace("_", " ").title()
+            p_skills = "Python, SQL, Git, Communication"
+            p_exp = 3.0
+            p_role = requirements_df["Role"].iloc[0]
+            
+        st.markdown("#### Review Parsed Data")
+        with st.form("parsed_data_form"):
+            c_name = st.text_input("Extracted Name", value=p_name)
+            c_role = st.selectbox("Role Recommendation", requirements_df["Role"].tolist(), index=requirements_df["Role"].tolist().index(p_role) if p_role in requirements_df["Role"].tolist() else 0)
+            c_skills = st.text_input("Extracted Skills", value=p_skills)
+            c_exp = st.number_input("Extracted Experience (Years)", min_value=0.0, max_value=20.0, value=float(p_exp), step=0.5)
+            
+            save_cand = st.form_submit_button("Confirm & Add Candidate", type="primary")
+            if save_cand:
+                new_cand = {
+                    "Name": c_name.strip(),
+                    "Role Applied": c_role,
+                    "Skills": c_skills.strip(),
+                    "Experience_Years": float(c_exp),
+                    "Match_Score": 0,
+                    "Status": "Screening"
+                }
+                st.session_state["candidates_db"] = [c for c in st.session_state["candidates_db"] if c["Name"] != c_name.strip()]
+                st.session_state["candidates_db"].append(new_cand)
+                
+                st.session_state["notifications"].insert(0, {
+                    "Message": f"Successfully parsed and loaded resume for {c_name}.",
+                    "Time": "Just now",
+                    "Read": False
+                })
+                st.success(f"Candidate **{c_name}** added to pool!")
+                st.session_state["nav_option"] = "Resume Analysis Report"
+                st.session_state["last_analyzed_candidate"] = c_name.strip()
+                safe_rerun()
+
+def render_resume_analysis(candidates_df, requirements_df):
+    st.markdown("### 📊 AI Resume Analysis Report")
+    
+    cand_names = sorted(candidates_df["Name"].tolist())
+    if not cand_names:
+        st.warning("No candidates available for analysis.")
+        return
+        
+    default_idx = 0
+    if "last_analyzed_candidate" in st.session_state:
+        lac = st.session_state["last_analyzed_candidate"]
+        if lac in cand_names:
+            default_idx = cand_names.index(lac)
+            
+    selected_name = st.selectbox("Select Candidate to Analyze", cand_names, index=default_idx)
+    
+    cand_data = candidates_df[candidates_df["Name"] == selected_name].iloc[0]
+    role_applied = cand_data["Role Applied"]
+    c_skills = [s.strip().lower() for s in cand_data["Skills"].split(",")]
+    
+    job_spec = requirements_df[requirements_df["Role"] == role_applied]
+    if not job_spec.empty:
+        req_skills = [s.strip().lower() for s in job_spec.iloc[0]["Required_Skills"].split(",")]
+        min_exp = int(job_spec.iloc[0]["Min_Experience"])
+    else:
+        req_skills = []
+        min_exp = 0
+        
+    matched = [s for s in req_skills if s in c_skills]
+    missing = [s for s in req_skills if s not in c_skills]
+    match_score = int((len(matched) / max(1, len(req_skills))) * 100)
+    
+    col_an_1, col_an_2 = st.columns([2, 1])
+    with col_an_1:
+        st.markdown(
+            f"""
+            <div class="explainability-card" style="margin-top: 0;">
+                <h4 style="margin:0; color:#f8fafc;">Resume Score Summary: {selected_name}</h4>
+                <p style="color:#94a3b8; margin:0.2rem 0 1rem 0;">Evaluated against: <strong>{role_applied}</strong></p>
+                <div style="font-size:1.1rem; line-height: 1.6; color:#cbd5e1;">
+                    ✔️ <strong>Matched Skills:</strong> <span style="color:#34d399;">{', '.join(matched) if matched else 'None'}</span><br>
+                    ❌ <strong>Skill Gaps:</strong> <span style="color:#f87171;">{', '.join(missing) if missing else 'None'}</span><br>
+                    📅 <strong>Experience Validation:</strong> Candidate has {cand_data['Experience_Years']} years (Job Requirement: {min_exp} years).
+                </div>
+            </div>
+            """, unsafe_allow_html=True
+        )
+        
+        st.markdown("#### 🤖 Core Resume Recommendations")
+        if not missing:
+            st.success("Excellent! The candidate matches all required skills for this position.")
+        else:
+            st.info(f"Recommended Upskilling: Suggest candidate completes certifications or projects in: **{', '.join(missing).upper()}**.")
+            
+        col_s, col_w = st.columns(2)
+        with col_s:
+            st.markdown(
+                """
+                <div style="background-color:rgba(52, 211, 153, 0.05); padding:1rem; border-radius:8px; border:1px solid #059669;">
+                    <strong style="color:#34d399;">⭐ Key Strengths</strong>
+                    <ul style="color:#cbd5e1; font-size:0.85rem; margin-top:0.4rem; padding-left:1rem;">
+                        <li>Has relevant experience matching the title.</li>
+                        <li>Possesses critical skills like Git.</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True
+            )
+        with col_w:
+            st.markdown(
+                """
+                <div style="background-color:rgba(248, 113, 113, 0.05); padding:1rem; border-radius:8px; border:1px solid #dc2626;">
+                    <strong style="color:#f87171;">⚠️ Growth Areas</strong>
+                    <ul style="color:#cbd5e1; font-size:0.85rem; margin-top:0.4rem; padding-left:1rem;">
+                        <li>Verify deep implementation capability of skills.</li>
+                        <li>Address missing skill prerequisites.</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True
+            )
+            
+    with col_an_2:
+        st.markdown("#### 🎯 Overall Match Score")
+        fig = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = match_score,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "Resume Quality Index", 'font': {'color': "#f8fafc", 'size': 14}},
+            gauge = {
+                'axis': {'range': [0, 100], 'tickcolor': "#cbd5e1"},
+                'bar': {'color': "#3b82f6"},
+                'steps': [
+                    {'range': [0, 50], 'color': "rgba(220, 38, 38, 0.2)"},
+                    {'range': [50, 75], 'color': "rgba(245, 158, 11, 0.2)"},
+                    {'range': [75, 100], 'color': "rgba(16, 185, 129, 0.2)"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 75
+                }
+            }
+        ))
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#f8fafc", family="Inter"),
+            height=280,
+            margin=dict(t=30, b=10, l=10, r=10)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+def render_job_description_generator():
+    st.markdown("### ✍️ AI Job Description Generator")
+    st.markdown("Generate optimized, SEO-friendly job descriptions using AI parameters and immediately inject them into the screening pool.")
+    
+    with st.form("jd_gen_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            title = st.text_input("Job Title", placeholder="e.g. Senior Cloud Architect")
+            exp_required = st.number_input("Minimum Experience (Years)", min_value=0, max_value=15, value=4)
+        with col2:
+            dept = st.text_input("Department", placeholder="e.g. Engineering / Cloud Services")
+            skills_req = st.text_input("Key Skills (comma-separated)", placeholder="e.g. AWS, Terraform, Docker, Python")
+            
+        benefits = st.text_area("Benefits & Perks", placeholder="e.g. Work from anywhere, flexible hours, health insurance")
+        submit_gen = st.form_submit_button("Generate Job Description", type="primary")
+        
+    if submit_gen:
+        if not title.strip() or not skills_req.strip():
+            st.error("Please provide both Job Title and Key Skills.")
+        else:
+            generated_jd = f"""
+# Job Opportunity: {title.strip()}
+
+### Department: {dept.strip() if dept.strip() else 'Engineering'}
+### Minimum Required Experience: {exp_required} Years
+
+## About the Role
+We are seeking a highly skilled **{title.strip()}** to join our growing organization. In this position, you will design, scale, and optimize core business systems, cooperating closely with cross-functional product stakeholders to deliver robust outcomes.
+
+## Key Responsibilities
+- Architect high-performance, fault-tolerant infrastructures.
+- Leverage **{skills_req.strip()}** to develop clean, scalable modules.
+- Formulate standards for system testing, deployment pipeline, and performance optimization.
+- Lead and mentor junior developers inside agile sprint modules.
+
+## Technical Qualifications
+- Minimum **{exp_required} years** of industry work experience.
+- Deep expertise in: **{skills_req.strip()}**.
+- Strong foundation in Git code control, unit testing frameworks, and systems delivery.
+
+## What We Offer
+- **Compensation**: Highly competitive package.
+- **Perks**: {benefits.strip() if benefits.strip() else 'Flexible hours, remote setup, and performance bonuses.'}
+- Comprehensive career development tracks and training stipends.
+            """
+            
+            st.markdown("---")
+            st.markdown("#### Generated Job Description Preview")
+            st.markdown(
+                f'<div style="background-color: #1e293b; padding: 2rem; border-radius: 8px; border: 1px solid #334155; color: #f8fafc;">{generated_jd}</div>', 
+                unsafe_allow_html=True
+            )
+            
+            st.session_state["temp_generated_jd"] = {
+                "Role": title.strip(),
+                "Required_Skills": skills_req.strip(),
+                "Min_Experience": int(exp_required)
+            }
+            
+            # Save button outside the generation form
+            st.info("To add this generated position to the jobs database, verify the preview above and click the save button below.")
+
+    if "temp_generated_jd" in st.session_state:
+        if st.button("Add Generated Job directly to Database", type="primary", use_container_width=True):
+            gj = st.session_state["temp_generated_jd"]
+            st.session_state["jobs_db"].append(gj)
+            del st.session_state["temp_generated_jd"]
+            st.success(f"Added position **{gj['Role']}** to Job Database successfully!")
+            st.session_state["nav_option"] = "Job Role Management (CRUD)"
+            safe_rerun()
+
+def render_hiring_pipeline():
+    st.markdown("### 🗂️ Recruitment Workflow & Hiring Pipeline")
+    st.markdown("Track and update candidates status stages dynamically. Select new pipeline stages to update their progress.")
+    
+    stages = ["Applied", "Screening", "Interviewing", "Offered", "Hired"]
+    cols = st.columns(len(stages))
+    
+    for idx, stage in enumerate(stages):
+        with cols[idx]:
+            st.markdown(
+                f"""
+                <div style="background-color: #0f172a; padding: 0.5rem; border-radius: 8px; text-align: center; border: 1px solid #334155; margin-bottom: 1rem;">
+                    <strong style="color: #cbd5e1; font-size: 0.9rem;">{stage.upper()}</strong>
+                </div>
+                """, unsafe_allow_html=True
+            )
+            
+            stage_cands = [c for c in st.session_state["candidates_db"] if c.get("Status", "Applied") == stage]
+            
+            if not stage_cands:
+                st.markdown("<p style='text-align:center; color:#64748b; font-size:0.8rem;'>Empty</p>", unsafe_allow_html=True)
+            else:
+                for c in stage_cands:
+                    c_name = c["Name"]
+                    c_role = c["Role Applied"]
+                    
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #1e293b; padding: 0.8rem; border-radius: 8px; border: 1px solid #475569; margin-bottom: 0.5rem;">
+                            <strong style="color: #f8fafc; font-size: 0.85rem;">{c_name}</strong><br>
+                            <span style="color: #94a3b8; font-size: 0.75rem;">{c_role}</span>
+                        </div>
+                        """, unsafe_allow_html=True
+                    )
+                    
+                    new_stage = st.selectbox(
+                        "Move", 
+                        stages, 
+                        index=stages.index(stage), 
+                        key=f"move_{c_name}_{stage}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    if new_stage != stage:
+                        for db_c in st.session_state["candidates_db"]:
+                            if db_c["Name"] == c_name:
+                                db_c["Status"] = new_stage
+                                break
+                        
+                        st.session_state["notifications"].insert(0, {
+                            "Message": f"Moved {c_name} from {stage} to {new_stage}.",
+                            "Time": "Just now",
+                            "Read": False
+                        })
+                        st.success(f"Moved {c_name}!")
+                        safe_rerun()
+
+def render_interview_feedback(candidates_df):
+    st.markdown("### 🖋️ Interview Feedback Portal")
+    st.markdown("Submit structured scorecards and qualitative evaluations for candidates after completing interviews.")
+    
+    cand_names = sorted(candidates_df["Name"].tolist())
+    if not cand_names:
+        st.warning("No candidates available.")
+        return
+        
+    with st.form("feedback_form"):
+        selected_cand = st.selectbox("Select Candidate Evaluated", cand_names)
+        interviewer = st.text_input("Interviewer Name", placeholder="e.g. Rachel Adams")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            tech_rating = st.slider("Technical Capability Rating (1-5)", 1, 5, 3)
+        with col2:
+            comm_rating = st.slider("Communication Skills Rating (1-5)", 1, 5, 3)
+        with col3:
+            cult_rating = st.slider("Cultural Alignment Rating (1-5)", 1, 5, 3)
+            
+        feedback_comments = st.text_area("Detailed Interview Remarks")
+        recommendation = st.selectbox("Final Hiring Outcome Recommendation", ["Hire", "Hold", "No Hire"])
+        
+        submit_feedback = st.form_submit_button("Submit Evaluation Scorecard", type="primary")
+        
+    if submit_feedback:
+        if not interviewer.strip() or not feedback_comments.strip():
+            st.error("Please enter both Interviewer Name and Comments.")
+        else:
+            c_row = candidates_df[candidates_df["Name"] == selected_cand].iloc[0]
+            new_fb = {
+                "Name": selected_cand,
+                "Role": c_row["Role Applied"],
+                "Interviewer": interviewer.strip(),
+                "Technical": int(tech_rating),
+                "Communication": int(comm_rating),
+                "Culture": int(cult_rating),
+                "Comments": feedback_comments.strip(),
+                "Outcome": recommendation
+            }
+            st.session_state["interview_feedback"].append(new_fb)
+            
+            if recommendation == "Hire":
+                for c in st.session_state["candidates_db"]:
+                    if c["Name"] == selected_cand:
+                        c["Status"] = "Offered"
+                        break
+                st.info(f"AI Suggestion: Candidate **{selected_cand}** status updated to 'Offered' due to 'Hire' feedback.")
+                
+            st.session_state["notifications"].insert(0, {
+                "Message": f"Interview scorecard submitted by {interviewer.strip()} for {selected_cand}.",
+                "Time": "Just now",
+                "Read": False
+            })
+            st.success("Interview feedback logged successfully!")
+            safe_rerun()
+            
+    st.markdown("---")
+    st.markdown("#### Active Feedback Submissions")
+    if len(st.session_state["interview_feedback"]) == 0:
+        st.info("No interview scorecards have been recorded yet.")
+    else:
+        fb_df = pd.DataFrame(st.session_state["interview_feedback"])
+        st.dataframe(fb_df, use_container_width=True, hide_index=True)
+
+def render_offer_letter_generator(candidates_df):
+    st.markdown("### ✉️ AI Offer Letter Generator")
+    st.markdown("Generate official compensation packages and contract agreements for candidates recommended for hire.")
+    
+    cands_offered = [c["Name"] for c in st.session_state["candidates_db"] if c.get("Status") in ["Offered", "Hired"]]
+    
+    if not cands_offered:
+        st.warning("No candidates currently in 'Offered' or 'Hired' pipeline stages. You can choose from all candidates below:")
+        cand_list = sorted(candidates_df["Name"].tolist())
+    else:
+        cand_list = cands_offered
+        
+    with st.form("offer_form"):
+        selected_cand = st.selectbox("Select Candidate for Offer", cand_list)
+        salary = st.text_input("Annual Gross Salary (CTC)", value="₹12,0,000")
+        joining_date = st.date_input("Joining Date", datetime.date.today() + datetime.timedelta(days=14))
+        reporting_mgr = st.text_input("Reporting Manager", value="Amit Sen (VP of Engineering)")
+        work_mode = st.selectbox("Work Location Arrangement", ["Remote", "Hybrid (2 days Office)", "Onsite / Office"])
+        
+        generate_offer = st.form_submit_button("Generate Official Contract", type="primary")
+        
+    if generate_offer:
+        c_row = candidates_df[candidates_df["Name"] == selected_cand].iloc[0]
+        c_role = c_row["Role Applied"]
+        
+        offer_template = f"""
+# OFFICIAL EMPLOYMENT CONTRACT & LETTER OF OFFER
+
+**Date**: {datetime.date.today().strftime("%B %d, %Y")}  
+**Ref Number**: TN/OFF/{selected_cand.upper().replace(" ", "")[:4]}/2026  
+
+Dear **{selected_cand}**,  
+
+We are pleased to offer you employment with **Talent Copilot Technologies Pvt. Ltd.** in the position of **{c_role}**.  
+
+## Core Terms of Employment:
+- **Salary**: {salary} per annum inclusive of all statutory components.
+- **Reporting Structure**: You will report to **{reporting_mgr}**.
+- **Joining Date**: Your formal date of joining is scheduled for **{joining_date.strftime("%B %d, %Y")}**.
+- **Work arrangement**: **{work_mode}**.
+
+## Probation & Notice Period:
+You will be on a probation period of three (3) months, after which your employment will be confirmed subject to performance review. Notice period is 60 days on either side.
+
+Please signify your acceptance of this offer by signing and returning the duplicate copy of this letter.
+
+Sincerely,  
+**HR Operations Team**  
+*Talent Copilot Corp*
+        """
+        
+        st.markdown("---")
+        st.markdown("#### Contract Preview Panel")
+        st.markdown(
+            f'<div style="background-color: #1e293b; padding: 2.5rem; border-radius: 12px; border: 2px dashed #475569; font-family: Courier; color: #cbd5e1;">{offer_template}</div>', 
+            unsafe_allow_html=True
+        )
+        
+        offer_record = {
+            "Name": selected_cand,
+            "Role": c_role,
+            "Salary": salary,
+            "StartDate": str(joining_date),
+            "Mode": work_mode,
+            "Status": "Sent"
+        }
+        st.session_state["offer_letters"] = [ol for ol in st.session_state["offer_letters"] if ol["Name"] != selected_cand]
+        st.session_state["offer_letters"].append(offer_record)
+        st.success(f"Offer contract generated for **{selected_cand}**!")
+        st.session_state["last_offered_candidate"] = selected_cand
+
+    if "last_offered_candidate" in st.session_state:
+        loc = st.session_state["last_offered_candidate"]
+        if st.button(f"Simulate Acceptance for {loc}", type="primary", use_container_width=True):
+            for c in st.session_state["candidates_db"]:
+                if c["Name"] == loc:
+                    c["Status"] = "Hired"
+                    break
+            for ol in st.session_state["offer_letters"]:
+                if ol["Name"] == loc:
+                    ol["Status"] = "Accepted"
+                    break
+            if loc not in st.session_state["onboarding_db"]:
+                st.session_state["onboarding_db"][loc] = {
+                    "Status": "Not Started",
+                    "Tasks": {"Verify Identity": False, "IT Asset Setup": False, "HR Induction": False, "Security Compliance": False}
+                }
+            st.session_state["notifications"].insert(0, {
+                "Message": f"Offer accepted by {loc}! Ready for onboarding.",
+                "Time": "Just now",
+                "Read": False
+            })
+            st.success(f"Candidate {loc} accepted the offer! Onboarding checklist created.")
+            del st.session_state["last_offered_candidate"]
+            safe_rerun()
+
+def render_onboarding_page():
+    st.markdown("### 🚀 Employee Onboarding Suite")
+    st.markdown("Manage checklist milestones, IT inventory allocation, and compliance declarations for hired candidates.")
+    
+    hired_employees = list(st.session_state["onboarding_db"].keys())
+    
+    if not hired_employees:
+        st.info("No candidates are currently marked as 'Hired' for onboarding configuration.")
+        return
+        
+    selected_emp = st.selectbox("Select Onboarding Candidate", hired_employees)
+    emp_details = st.session_state["onboarding_db"][selected_emp]
+    tasks = emp_details["Tasks"]
+    
+    st.markdown(f"#### Onboarding Dashboard: **{selected_emp}**")
+    
+    completed_tasks = sum(1 for t in tasks.values() if t)
+    total_tasks = len(tasks)
+    progress_pct = int((completed_tasks / total_tasks) * 100)
+    
+    st.write(f"Completion Status: **{emp_details['Status']}** ({progress_pct}%)")
+    st.progress(progress_pct)
+    
+    st.markdown("---")
+    st.markdown("##### Task Checklist")
+    
+    t1 = st.checkbox("Identity & Credential Verification (Govt ID, Degrees)", value=tasks.get("Verify Identity", False))
+    t2 = st.checkbox("IT System Provisioning (Laptop, Accounts, Email)", value=tasks.get("IT Asset Setup", False))
+    t3 = st.checkbox("HR Welcome Induction & Salary Accounts Signoff", value=tasks.get("HR Induction", False))
+    t4 = st.checkbox("Security, Anti-Phishing & Compliance Training Modules", value=tasks.get("Security Compliance", False))
+    
+    if st.button("Save Onboarding Milestones", type="primary"):
+        tasks["Verify Identity"] = t1
+        tasks["IT Asset Setup"] = t2
+        tasks["HR Induction"] = t3
+        tasks["Security Compliance"] = t4
+        
+        all_completed = t1 and t2 and t3 and t4
+        some_completed = t1 or t2 or t3 or t4
+        
+        if all_completed:
+            emp_details["Status"] = "Completed"
+        elif some_completed:
+            emp_details["Status"] = "In Progress"
+        else:
+            emp_details["Status"] = "Not Started"
+            
+        st.success(f"Successfully updated onboarding progression checklist for **{selected_emp}**!")
+        safe_rerun()
+
+def render_decision_support(candidates_df, requirements_df):
+    st.markdown("### 🧠 AI Recommendation & Decision Support")
+    st.markdown("AI-driven decision guidance showing matching metrics, hiring advice, risk alerts, and custom training recommendations.")
+    
+    roles = requirements_df["Role"].tolist()
+    selected_role = st.selectbox("Select Target Job Opening", roles, key="decision_role")
+    
+    role_req = requirements_df[requirements_df["Role"] == selected_role].iloc[0]
+    req_skills = [s.strip().lower() for s in role_req["Required_Skills"].split(",")]
+    
+    display_cands = candidates_df[candidates_df["Role Applied"] == selected_role]
+    
+    if display_cands.empty:
+        st.warning("No candidates found applying for this position.")
+        return
+        
+    recommendation_list = []
+    for idx, c in display_cands.iterrows():
+        c_name = c["Name"]
+        c_skills = [s.strip().lower() for s in c["Skills"].split(",")]
+        matched = [s for s in req_skills if s in c_skills]
+        missing = [s for s in req_skills if s not in c_skills]
+        
+        match_pct = int((len(matched) / max(1, len(req_skills))) * 100)
+        exp_years = float(c["Experience_Years"])
+        
+        if match_pct >= 80 and exp_years >= float(role_req["Min_Experience"]):
+            grade = "A+ Highly Recommended"
+            action = "Immediate Interview / Fast-Track Offer"
+            risk = "Low risk. Matches role requirements exceptionally well."
+        elif match_pct >= 60:
+            grade = "B Recommended"
+            action = "Screening Call / Evaluate Missing Skills"
+            risk = f"Moderate risk. Missing skills: {', '.join(missing)}."
+        else:
+            grade = "C Review Required"
+            action = "Hold / Keep in Pipeline"
+            risk = "High risk. Significant skill or experience deficiency."
+            
+        recommendation_list.append({
+            "Name": c_name,
+            "Score": match_pct,
+            "Experience": exp_years,
+            "Grade": grade,
+            "Action": action,
+            "Risk": risk,
+            "Gaps": missing
+        })
+        
+    recommendation_list = sorted(recommendation_list, key=lambda x: x["Score"], reverse=True)
+    
+    st.markdown("#### Candidate Recommendation Grid")
+    for r in recommendation_list:
+        border_color = "#10b981" if "A+" in r["Grade"] else ("#f59e0b" if "B" in r["Grade"] else "#dc2626")
+        gaps_str = ", ".join(r["Gaps"]).upper() if r["Gaps"] else "None"
+        
+        card_html = f"""
+        <div style="background-color: #1e293b; padding: 1.2rem; border-radius: 8px; border-left: 5px solid {border_color}; border-top: 1px solid #334155; border-right: 1px solid #334155; border-bottom: 1px solid #334155; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 1.1rem; color: #f8fafc;">{r['Name']}</strong>
+                <span style="background-color: #0f172a; border: 1px solid {border_color}; color: {border_color}; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">{r['Grade']}</span>
+            </div>
+            <div style="color: #cbd5e1; font-size: 0.9rem; margin-top: 0.5rem;">
+                Match Score: <strong>{r['Score']}%</strong> | Experience: <strong>{r['Experience']} Years</strong> (Job requires: {role_req['Min_Experience']} yrs)<br>
+                💥 <strong>Gap Risk:</strong> {r['Risk']}<br>
+                📋 <strong>Suggested Action:</strong> {r['Action']}
+            </div>
+        </div>
+        """
+        st.markdown(card_html, unsafe_allow_html=True)
+        
+        if r["Gaps"]:
+            st.markdown(f"📖 **AI Onboarding Upskill Course Suggested:** Program for onboarding **{r['Name']}**: Complete courses on *{gaps_str}*.")
+        st.write("")
+
+def render_reports_export(candidates_df, requirements_df):
+    st.markdown("### 📋 Reports & Data Export Portal")
+    st.markdown("Download active recruiting databases, analytics summaries, and logs to CSV files.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("##### 1. Candidates Database Report")
+        st.dataframe(candidates_df[["Name", "Role Applied", "Skills", "Experience_Years", "Status"]], use_container_width=True, hide_index=True)
+        
+        csv_candidates = candidates_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Candidates CSV",
+            data=csv_candidates,
+            file_name="talent_candidates_report.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+        
+    with col2:
+        st.markdown("##### 2. Active Positions Report")
+        st.dataframe(requirements_df, use_container_width=True, hide_index=True)
+        
+        csv_jobs = requirements_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Job Openings CSV",
+            data=csv_jobs,
+            file_name="talent_job_requirements_report.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+        
+    st.markdown("---")
+    st.markdown("##### 3. Interview Schedules Report")
+    int_df = pd.DataFrame(st.session_state["interviews"])
+    st.dataframe(int_df, use_container_width=True, hide_index=True)
+    
+    csv_interviews = int_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download Interview Schedule CSV",
+        data=csv_interviews,
+        file_name="talent_interviews_report.csv",
+        mime="text/csv"
+    )
+
+def render_help_support():
+    st.markdown("### ❓ Help & Technical Support Center")
+    st.markdown("Need assistance navigating the Talent Copilot? Expand our FAQs or submit an urgent support ticket directly to our admin panel.")
+    
+    st.markdown("#### Frequently Asked Questions (FAQ)")
+    with st.expander("How does the Dynamic Match Score work?"):
+        st.write("Our system extracts candidate skills and checks their overlap with required skills listed in the job requisition, factoring in active weights tuned in 'System Settings'.")
+    with st.expander("How are bias levels calculated in the audit panel?"):
+        st.write("We evaluate demographic or experience concentrations inside active shortlists. If any single group constitutes >70% of the shortlist pool, we raise a skew flag.")
+    with st.expander("Can I add custom job openings?"):
+        st.write("Yes! Navigate to the 'Job Role Management (CRUD)' module to create, modify, or delete roles, or generate new ones in the 'AI Job Description Generator'.")
+        
+    st.markdown("---")
+    st.markdown("#### Submit a Support Ticket")
+    with st.form("support_form", clear_on_submit=True):
+        name = st.text_input("Name")
+        email = st.text_input("Email")
+        issue_type = st.selectbox("Issue Category", ["Feature Request", "UI Bug", "Matching Engine Query", "Database Sync", "Other"])
+        desc = st.text_area("Detailed Problem Statement")
+        priority = st.select_slider("Ticket Priority Level", options=["Low", "Medium", "High", "Critical"])
+        
+        submitted = st.form_submit_button("File Support Ticket", type="primary")
+        
+    if submitted:
+        if not name.strip() or not desc.strip():
+            st.error("Please fill in your Name and Description.")
+        else:
+            ticket_id = f"TC-{datetime.date.today().strftime('%Y%m')}-9827"
+            st.success(f"Support Ticket successfully logged! Reference ID: **{ticket_id}**. Our engineers will follow up at **{email}** within 24 hours.")
+
+def render_about_page():
+    st.markdown("### ℹ️ About AI Recruitment & Talent Copilot")
+    st.markdown("This project is built to demonstrate high-fidelity talent discovery, fair-matching screening pipelines, and onboarding analytics.")
+    
+    st.markdown("#### 🚀 Project Architecture")
+    st.markdown(
+        """
+        - **Frontend & App Logic**: Streamlit Web Framework
+        - **Data Processing**: Pandas Dataframes & NumPy
+        - **Data Visualizations**: Plotly Graph Objects & Bar/Pie charts
+        - **Database Layer**: In-Memory Streamlit Session State with CSV Sync hooks
+        - **Design Elements**: Custom Tailwind/Sora fonts injections with glassmorphism styles
+        """
+    )
+    
+    st.markdown("---")
+    st.markdown("#### 📜 Key Platform Highlights")
+    st.markdown(
+        """
+        - **Dynamic Weighted Matching**: Customize the importance of Technical Skills, Experience, and Culture fit.
+        - **Explainable Recommendation Logs**: Plain-language ledger audits detailing matching paths.
+        - **Bias & Fairness Auditor**: Actively alerts HR to candidate pool skew values.
+        """
+    )
+
 # Helper to load data safely
 def load_csv_data(filepath):
     try:
@@ -85,6 +904,46 @@ if "settings_weights" not in st.session_state:
 
 if "candidate_notes" not in st.session_state:
     st.session_state["candidate_notes"] = {}
+
+if "interview_feedback" not in st.session_state:
+    st.session_state["interview_feedback"] = [
+        {"Name": "Arun", "Role": "Software Engineer", "Interviewer": "Sarah Jenkins", "Technical": 4, "Communication": 4, "Culture": 5, "Comments": "Strong Python knowledge and good problem-solving. Lacks some React depth but is eager to learn.", "Outcome": "Hire"},
+        {"Name": "Divya", "Role": "Software Engineer", "Interviewer": "John Doe", "Technical": 3, "Communication": 5, "Culture": 4, "Comments": "Excellent communication, but needs to brush up on SQL optimization queries.", "Outcome": "Hold"}
+    ]
+
+if "onboarding_db" not in st.session_state:
+    st.session_state["onboarding_db"] = {
+        "Arun": {"Status": "In Progress", "Tasks": {"Verify Identity": True, "IT Asset Setup": True, "HR Induction": False, "Security Compliance": False}},
+        "Divya": {"Status": "Not Started", "Tasks": {"Verify Identity": False, "IT Asset Setup": False, "HR Induction": False, "Security Compliance": False}},
+        "Kiran": {"Status": "Completed", "Tasks": {"Verify Identity": True, "IT Asset Setup": True, "HR Induction": True, "Security Compliance": True}}
+    }
+
+if "offer_letters" not in st.session_state:
+    st.session_state["offer_letters"] = [
+        {"Name": "Kiran", "Role": "Software Engineer", "Salary": "₹12,00,000", "StartDate": "2026-08-01", "Mode": "Hybrid", "Status": "Accepted"}
+    ]
+
+# Override the candidate database loading to inject a 'Status' pipeline tracker if not already present
+if "candidates_db" not in st.session_state and candidates_df_raw is not None:
+    db = candidates_df_raw.to_dict(orient="records")
+    for i, c in enumerate(db):
+        # Evenly distribute candidates across various statuses for high-fidelity visualization
+        if i % 5 == 0:
+            c["Status"] = "Screening"
+        elif i % 5 == 1:
+            c["Status"] = "Interviewing"
+        elif i % 5 == 2:
+            c["Status"] = "Offered"
+        elif i % 5 == 3:
+            c["Status"] = "Hired"
+        else:
+            c["Status"] = "Applied"
+    st.session_state["candidates_db"] = db
+elif "candidates_db" in st.session_state:
+    # Ensure all items in st.session_state["candidates_db"] have a 'Status' key
+    for c in st.session_state["candidates_db"]:
+        if "Status" not in c:
+            c["Status"] = "Applied"
 
 # Convert session states back to dataframes so application works seamlessly
 if "jobs_db" in st.session_state and len(st.session_state["jobs_db"]) > 0:
@@ -307,21 +1166,50 @@ if candidates_df is not None and requirements_df is not None:
     
     # 1. Global Navigation in Sidebar
     st.sidebar.markdown("### Navigation Module")
+    
+    if "nav_option" not in st.session_state:
+        st.session_state["nav_option"] = "Landing / Welcome Page"
+        
+    workspaces_list = [
+        "Landing / Welcome Page",
+        "Candidate Application Portal",
+        "Resume Upload Page",
+        "Resume Analysis Report",
+        "Candidate Assessment Suite",
+        "AI Job Description Generator",
+        "Recruitment Workflow / Hiring Pipeline",
+        "Interview Feedback Page",
+        "Offer Letter Generator",
+        "Employee Onboarding Page",
+        "AI Recommendation / Decision Support",
+        "Pipeline Dashboard",
+        "Job Role Management (CRUD)",
+        "Candidate Profile Browser",
+        "Interview Scheduler & Calendar",
+        "Notifications Center",
+        "Advanced HR Analytics",
+        "Employee Directory",
+        "AI Chatbot Assistant",
+        "Reports & Export Page",
+        "Help & Support Page",
+        "About Project Page",
+        "System Settings"
+    ]
+    
+    current_idx = 0
+    if st.session_state["nav_option"] in workspaces_list:
+        current_idx = workspaces_list.index(st.session_state["nav_option"])
+        
     navigation_option = st.sidebar.selectbox(
         "Select Workspace",
-        [
-            "Candidate Assessment Suite",
-            "Pipeline Dashboard",
-            "Job Role Management (CRUD)",
-            "Candidate Profile Browser",
-            "Interview Scheduler & Calendar",
-            "Notifications Center",
-            "Advanced HR Analytics",
-            "Employee Directory",
-            "AI Chatbot Assistant",
-            "System Settings"
-        ]
+        workspaces_list,
+        index=current_idx,
+        key="nav_selectbox"
     )
+    
+    if st.session_state["nav_selectbox"] != st.session_state["nav_option"]:
+        st.session_state["nav_option"] = st.session_state["nav_selectbox"]
+        safe_rerun()
     
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Target Job Role")
@@ -401,8 +1289,48 @@ if candidates_df is not None and requirements_df is not None:
             
         display_candidates = display_candidates[display_candidates["Skills"].apply(matches_skills)]
 
+    # ------------------ NEW CUSTOM WORKSPACE MODULES ROUTING ------------------
+    if navigation_option == "Landing / Welcome Page":
+        render_landing_page(candidates_df_calc, requirements_df)
+        
+    elif navigation_option == "Candidate Application Portal":
+        render_candidate_portal(requirements_df)
+        
+    elif navigation_option == "Resume Upload Page":
+        render_resume_upload(requirements_df)
+        
+    elif navigation_option == "Resume Analysis Report":
+        render_resume_analysis(candidates_df_calc, requirements_df)
+        
+    elif navigation_option == "AI Job Description Generator":
+        render_job_description_generator()
+        
+    elif navigation_option == "Recruitment Workflow / Hiring Pipeline":
+        render_hiring_pipeline()
+        
+    elif navigation_option == "Interview Feedback Page":
+        render_interview_feedback(candidates_df_calc)
+        
+    elif navigation_option == "Offer Letter Generator":
+        render_offer_letter_generator(candidates_df_calc)
+        
+    elif navigation_option == "Employee Onboarding Page":
+        render_onboarding_page()
+        
+    elif navigation_option == "AI Recommendation / Decision Support":
+        render_decision_support(candidates_df_calc, requirements_df)
+        
+    elif navigation_option == "Reports & Export Page":
+        render_reports_export(candidates_df_calc, requirements_df)
+        
+    elif navigation_option == "Help & Support Page":
+        render_help_support()
+        
+    elif navigation_option == "About Project Page":
+        render_about_page()
+
     # ------------------ MODULE 1: ASSESSMENT SUITE (ORIGINAL 3 TABS) ------------------
-    if navigation_option == "Candidate Assessment Suite":
+    elif navigation_option == "Candidate Assessment Suite":
         
         tab_pool, tab_explain, tab_bias = st.tabs([
             "Candidate Pool", 
