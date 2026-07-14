@@ -385,8 +385,8 @@ def render_resume_upload(requirements_df):
                             st.markdown(
                                 f"""<div style="background:rgba(20,83,45,0.35);border:1px solid #16a34a;
                                     border-radius:10px;padding:0.85rem;margin-bottom:0.5rem;">
-                                    <div style="color:#4ade80;font-weight:700;font-size:0.95rem;">✅ {item.get('skill','')}</div>
-                                    <div style="color:#d1fae5;font-size:0.83rem;margin-top:0.35rem;line-height:1.5;">{item.get('note','')}</div>
+                                    <div style="color:#0f172a;font-weight:700;font-size:0.95rem;">✅ {item.get('skill','')}</div>
+                                    <div style="color:#0f172a;font-size:0.83rem;margin-top:0.35rem;line-height:1.5;">{item.get('note','')}</div>
                                 </div>""",
                                 unsafe_allow_html=True
                             )
@@ -444,7 +444,7 @@ def render_resume_upload(requirements_df):
                         f"""<div style="background:rgba(30,64,175,0.2);border:1px solid #3b82f6;
                             border-radius:12px;padding:1.1rem 1.5rem;margin-top:0.8rem;">
                             <div style="color:#93c5fd;font-weight:700;font-size:0.82rem;margin-bottom:0.4rem;letter-spacing:0.05em;">🧠 AI RECRUITER VERDICT</div>
-                            <div style="color:#f1f5f9;font-size:0.92rem;line-height:1.7;font-weight:400;">{verdict}</div>
+                            <div style="color:#0f172a;font-size:0.92rem;line-height:1.7;font-weight:500;">{verdict}</div>
                         </div>""",
                         unsafe_allow_html=True
                     )
@@ -610,8 +610,8 @@ def render_resume_analysis(candidates_df, requirements_df):
                                 f"""
                                 <div style="background:rgba(20,83,45,0.35); border:1px solid #16a34a;
                                             border-radius:10px; padding:0.85rem; margin-bottom:0.5rem;">
-                                    <div style="color:#4ade80; font-weight:700; font-size:0.95rem;">✅ {skill_name}</div>
-                                    <div style="color:#d1fae5; font-size:0.83rem; margin-top:0.35rem; line-height:1.5;">{skill_note}</div>
+                                    <div style="color:#0f172a; font-weight:700; font-size:0.95rem;">✅ {skill_name}</div>
+                                    <div style="color:#0f172a; font-size:0.83rem; margin-top:0.35rem; line-height:1.5;">{skill_note}</div>
                                 </div>
                                 """,
                                 unsafe_allow_html=True
@@ -675,7 +675,7 @@ def render_resume_analysis(candidates_df, requirements_df):
                         <div style="background:rgba(30,64,175,0.2); border:1px solid #3b82f6;
                                     border-radius:12px; padding:1.1rem 1.5rem; margin-top:1rem;">
                             <div style="color:#93c5fd; font-weight:700; font-size:0.85rem; margin-bottom:0.5rem; letter-spacing:0.05em;">🧠 AI RECRUITER VERDICT</div>
-                            <div style="color:#f1f5f9; font-size:0.94rem; line-height:1.7; font-weight:400;">{verdict}</div>
+                            <div style="color:#0f172a; font-size:0.94rem; line-height:1.7; font-weight:500;">{verdict}</div>
                         </div>
                         """,
                         unsafe_allow_html=True
@@ -2893,49 +2893,158 @@ if candidates_df is not None and requirements_df is not None:
 
     # ------------------ MODULE 9: AI CHATBOT ASSISTANT ------------------
     elif navigation_option == "AI Chatbot Assistant":
-        st.markdown("### AI Talent Copilot Assistant")
-        st.write("Ask your AI assistant questions regarding candidates, match scores, experience levels, or specific skills.")
-        
-        # Render Chat History
-        for message in st.session_state["chat_history"]:
-            bubble_class = "chat-bubble-user" if message["role"] == "user" else "chat-bubble-assistant"
-            st.markdown(f'<div class="{bubble_class}">{message["content"]}</div>', unsafe_allow_html=True)
+        st.markdown("### 🤖 AI Talent Copilot Assistant")
+        st.write("Ask your AI assistant questions regarding candidates, match scores, experience levels, or upload a document to discuss.")
+
+        # Initialize session state variables if not present
+        if "chatbot_uploaded_text" not in st.session_state:
+            st.session_state["chatbot_uploaded_text"] = None
+        if "chatbot_uploaded_filename" not in st.session_state:
+            st.session_state["chatbot_uploaded_filename"] = None
+
+        col_chat, col_context = st.columns([5, 3])
+
+        with col_context:
+            st.markdown("#### 📁 Chat Context & File Upload")
             
-        # Preset Quick Query Buttons
-        st.markdown("##### Fast Queries")
-        col_q1, col_q2, col_q3 = st.columns(3)
-        with col_q1:
-            q1_clicked = st.button("Who is top matched Software Engineer?", use_container_width=True)
-        with col_q2:
-            q2_clicked = st.button("List candidates with React skills", use_container_width=True)
-        with col_q3:
-            q3_clicked = st.button("Show candidates with >= 5 yrs exp", use_container_width=True)
+            # File Uploader
+            uploaded_file = st.file_uploader(
+                "Upload context file (PDF, TXT, DOCX)", 
+                type=["pdf", "txt", "docx"], 
+                key="chatbot_file_uploader"
+            )
             
-        chat_input = st.text_input("Ask your query here...", placeholder="e.g. Find candidates who know SQL and Python")
-        send_clicked = st.button("Submit Query")
-        
-        # Chat Logic triggered
-        user_query = None
-        if q1_clicked:
-            user_query = "Who is top matched Software Engineer?"
-        elif q2_clicked:
-            user_query = "List candidates with React skills"
-        elif q3_clicked:
-            user_query = "Show candidates with >= 5 yrs exp"
-        elif send_clicked and chat_input.strip():
-            user_query = chat_input.strip()
-            
-        if user_query:
-            # Append user message
-            st.session_state["chat_history"].append({"role": "user", "content": user_query})
-            
-            cols_to_use = ["Name", "Role Applied", "Skills", "Experience_Years", "Match_Score"]
-            candidates_context = candidates_df_calc[cols_to_use].to_string(index=False)
-            with st.spinner("AI is thinking..."):
-                response = chatbot_query(user_query=user_query, candidates_context=candidates_context)
+            if uploaded_file is not None:
+                # Process the file if it's new
+                if st.session_state["chatbot_uploaded_filename"] != uploaded_file.name:
+                    file_ext = uploaded_file.name.lower().split(".")[-1]
+                    raw_bytes = uploaded_file.read()
+                    extracted_text = ""
                     
-            st.session_state["chat_history"].append({"role": "assistant", "content": response})
-            safe_rerun()
+                    try:
+                        if file_ext == "txt":
+                            extracted_text = raw_bytes.decode("utf-8", errors="ignore")
+                        elif file_ext == "pdf":
+                            import io
+                            try:
+                                import pypdf
+                                reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+                                extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                            except ImportError:
+                                try:
+                                    import PyPDF2
+                                    reader = PyPDF2.PdfReader(io.BytesIO(raw_bytes))
+                                    extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                                except ImportError:
+                                    extracted_text = f"[PDF libraries missing. Could not extract {uploaded_file.name}]"
+                        elif file_ext == "docx":
+                            import io
+                            import docx
+                            doc = docx.Document(io.BytesIO(raw_bytes))
+                            extracted_text = "\n".join(p.text for p in doc.paragraphs)
+                    except Exception as e:
+                        extracted_text = f"[Error reading file: {e}]"
+                        
+                    st.session_state["chatbot_uploaded_text"] = extracted_text
+                    st.session_state["chatbot_uploaded_filename"] = uploaded_file.name
+                    st.success(f"Successfully processed **{uploaded_file.name}**!")
+                    safe_rerun()
+            
+            # Show active file status
+            if st.session_state["chatbot_uploaded_filename"]:
+                st.markdown(
+                    f"""
+                    <div style="background-color:rgba(16,185,129,0.15); border:1px solid #10b981; 
+                                padding:1rem; border-radius:8px; margin-bottom:1rem;">
+                        <span style="color:#10b981; font-weight:700;">🟢 ACTIVE FILE CONTEXT</span><br>
+                        <span style="color:#f1f5f9; font-size:0.9rem;"><strong>File:</strong> {st.session_state['chatbot_uploaded_filename']}</span><br>
+                        <span style="color:#cbd5e1; font-size:0.8rem;"><strong>Size:</strong> {len(st.session_state['chatbot_uploaded_text'] or '')} characters extracted</span>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                
+                # Preview of extracted text
+                if st.session_state["chatbot_uploaded_text"]:
+                    with st.expander("🔍 Preview Extracted Text", expanded=False):
+                        st.text(st.session_state["chatbot_uploaded_text"][:800] + "...")
+                        
+                if st.button("❌ Remove File Context", use_container_width=True, type="secondary"):
+                    st.session_state["chatbot_uploaded_text"] = None
+                    st.session_state["chatbot_uploaded_filename"] = None
+                    # Also clear uploader state in session state if key exists
+                    if "chatbot_file_uploader" in st.session_state:
+                        del st.session_state["chatbot_file_uploader"]
+                    st.success("File context cleared.")
+                    safe_rerun()
+            else:
+                st.info("No file uploaded. The chatbot will query the active candidate database by default. Upload a resume, JD, or notes to chat about them!")
+
+            st.markdown("---")
+            # Clear chat button
+            if st.button("🗑️ Clear Chat History", use_container_width=True):
+                st.session_state["chat_history"] = [
+                    {"role": "assistant", "content": "Hello! I am your AI Talent Assistant. Ask me questions about candidates, matching criteria, or recruitment metrics."}
+                ]
+                st.success("Chat history cleared!")
+                safe_rerun()
+
+        with col_chat:
+            st.markdown("#### 💬 Conversation")
+            
+            # Custom styled container for messaging look
+            chat_container = st.container(height=450)
+            with chat_container:
+                for message in st.session_state["chat_history"]:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
+
+            # Preset Quick Query Buttons
+            st.markdown("##### ⚡ Quick Queries")
+            col_q1, col_q2, col_q3 = st.columns(3)
+            with col_q1:
+                q1_clicked = st.button("Who is top matched Software Engineer?", use_container_width=True, key="q_btn_1")
+            with col_q2:
+                q2_clicked = st.button("List candidates with React skills", use_container_width=True, key="q_btn_2")
+            with col_q3:
+                q3_clicked = st.button("Show candidates with >= 5 yrs exp", use_container_width=True, key="q_btn_3")
+
+            chat_input_val = st.chat_input("Ask your query here...")
+
+            # Chat Logic triggered
+            user_query = None
+            if q1_clicked:
+                user_query = "Who is top matched Software Engineer?"
+            elif q2_clicked:
+                user_query = "List candidates with React skills"
+            elif q3_clicked:
+                user_query = "Show candidates with >= 5 yrs exp"
+            elif chat_input_val:
+                user_query = chat_input_val.strip()
+
+            if user_query:
+                # Append user message
+                st.session_state["chat_history"].append({"role": "user", "content": user_query})
+                
+                # Assemble database context
+                cols_to_use = ["Name", "Role Applied", "Skills", "Experience_Years", "Match_Score"]
+                candidates_context = candidates_df_calc[cols_to_use].to_string(index=False)
+                
+                # If there's an uploaded file, merge it into context
+                if st.session_state["chatbot_uploaded_text"]:
+                    context_to_send = (
+                        f"Candidates Summary Table:\n{candidates_context}\n\n"
+                        f"[Uploaded Document: {st.session_state['chatbot_uploaded_filename']}]\n"
+                        f"{st.session_state['chatbot_uploaded_text'][:3500]}"
+                    )
+                else:
+                    context_to_send = candidates_context
+
+                with st.spinner("AI is thinking..."):
+                    response = chatbot_query(user_query=user_query, candidates_context=context_to_send)
+                        
+                st.session_state["chat_history"].append({"role": "assistant", "content": response})
+                safe_rerun()
 
     # ------------------ MODULE 10: SYSTEM SETTINGS ------------------
     elif navigation_option == "System Settings":
