@@ -4,6 +4,20 @@ import plotly.graph_objects as go
 import os
 import textwrap
 import datetime
+import ollama
+from ai_modules import (
+    resume_matching,
+    skill_gap_analyser,
+    candidate_ranking,
+    hiring_recommendation,
+    resume_chat,
+    chatbot_query,
+    email_generator,
+    recruitment_analysis,
+    talent_insight,
+    job_discussion_analyzer,
+    interview_question_generator,
+)
 
 # 1. Must call set_page_config as the first Streamlit command
 st.set_page_config(
@@ -156,55 +170,111 @@ def render_candidate_portal(requirements_df):
                 st.success(f"Thank you, {name}! Your application for **{applied_role}** has been submitted successfully.")
 
 def render_resume_upload(requirements_df):
-    st.markdown("### 📤 AI Resume Parser & Upload")
-    st.markdown("Upload resumes to automatically extract keywords, skills, and experience metrics to create candidate profiles.")
-    
-    uploaded_file = st.file_uploader("Choose a Resume file", type=["pdf", "txt", "docx"])
-    
+    st.markdown("### 📤 AI Resume Upload & Fit Analyzer")
+    st.markdown("Upload a candidate resume, set the target job position, and instantly get an AI-powered resume fit analysis.")
+
+    col_up1, col_up2 = st.columns([3, 2])
+    with col_up1:
+        uploaded_file = st.file_uploader("Upload Resume (PDF, TXT or DOCX)", type=["pdf", "txt", "docx"])
+    with col_up2:
+        target_role = st.selectbox("Target Job Position", requirements_df["Role"].tolist(), key="upload_target_role")
+
+    # ---- Extract resume text ----
+    resume_text = ""
+    parsed_name = ""
+    parsed_skills = ""
+    parsed_exp = 3.0
+
     if uploaded_file is not None:
-        st.info(f"File uploaded: **{uploaded_file.name}**")
-        
-        progress_bar = st.progress(0)
-        import time
-        for percent_complete in range(100):
-            time.sleep(0.005)
-            progress_bar.progress(percent_complete + 1)
-            
-        st.success("✅ AI parsing complete! Extracted structural candidates parameters.")
-        
+        file_ext = uploaded_file.name.lower().split(".")[-1]
+        raw_bytes = uploaded_file.read()
+
+        if file_ext == "txt":
+            resume_text = raw_bytes.decode("utf-8", errors="ignore")
+        elif file_ext == "pdf":
+            try:
+                import io
+                try:
+                    import pypdf
+                    reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+                    resume_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                except ImportError:
+                    try:
+                        import PyPDF2
+                        reader = PyPDF2.PdfReader(io.BytesIO(raw_bytes))
+                        resume_text = "\n".join(
+                            page.extract_text() or "" for page in reader.pages
+                        )
+                    except ImportError:
+                        resume_text = f"[PDF content of {uploaded_file.name} — install pypdf for full text extraction]"
+            except Exception as e:
+                resume_text = f"[Could not extract PDF text: {e}]"
+        elif file_ext == "docx":
+            try:
+                import io
+                import docx
+                doc = docx.Document(io.BytesIO(raw_bytes))
+                resume_text = "\n".join(p.text for p in doc.paragraphs)
+            except ImportError:
+                resume_text = f"[DOCX content of {uploaded_file.name} — install python-docx for full extraction]"
+            except Exception as e:
+                resume_text = f"[Could not extract DOCX text: {e}]"
+
+        # Fall back to name-based demo data if extraction is empty
         fn = uploaded_file.name.lower()
-        if "arun" in fn:
-            p_name, p_skills, p_exp, p_role = "Arun", "Python, SQL, Git, Docker, Communication", 4, "Software Engineer"
-        elif "divya" in fn:
-            p_name, p_skills, p_exp, p_role = "Divya", "Python, React, JavaScript, HTML, CSS", 2, "Software Engineer"
+        if not resume_text.strip():
+            if "arun" in fn:
+                resume_text = "Name: Arun. Skills: Python, SQL, Git, Docker, Communication. Experience: 4 years. Applied for Software Engineer."
+                parsed_name, parsed_skills, parsed_exp = "Arun", "Python, SQL, Git, Docker, Communication", 4.0
+            elif "divya" in fn:
+                resume_text = "Name: Divya. Skills: Python, React, JavaScript, HTML, CSS. Experience: 2 years. Applied for Software Engineer."
+                parsed_name, parsed_skills, parsed_exp = "Divya", "Python, React, JavaScript, HTML, CSS", 2.0
+            else:
+                parsed_name = uploaded_file.name.split(".")[0].replace("_", " ").title()
+                parsed_skills = "Python, SQL, Git, Communication"
+                parsed_exp = 3.0
+                resume_text = f"Name: {parsed_name}. Skills: {parsed_skills}. Experience: {parsed_exp} years."
         else:
-            p_name = uploaded_file.name.split(".")[0].replace("_", " ").title()
-            p_skills = "Python, SQL, Git, Communication"
-            p_exp = 3.0
-            p_role = requirements_df["Role"].iloc[0]
-            
-        st.markdown("#### Review Parsed Data")
+            parsed_name = uploaded_file.name.split(".")[0].replace("_", " ").title()
+
+        st.success(f"✅ Resume **{uploaded_file.name}** loaded successfully ({len(resume_text)} characters extracted).")
+
+        # ---- Editable parsed fields ----
+        st.markdown("#### 📝 Review Extracted Details")
         with st.form("parsed_data_form"):
-            c_name = st.text_input("Extracted Name", value=p_name)
-            c_role = st.selectbox("Role Recommendation", requirements_df["Role"].tolist(), index=requirements_df["Role"].tolist().index(p_role) if p_role in requirements_df["Role"].tolist() else 0)
-            c_skills = st.text_input("Extracted Skills", value=p_skills)
-            c_exp = st.number_input("Extracted Experience (Years)", min_value=0.0, max_value=20.0, value=float(p_exp), step=0.5)
-            
-            save_cand = st.form_submit_button("Confirm & Add Candidate", type="primary")
-            if save_cand:
+            c_name   = st.text_input("Candidate Name", value=parsed_name)
+            c_role   = st.selectbox(
+                "Role Applied For",
+                requirements_df["Role"].tolist(),
+                index=requirements_df["Role"].tolist().index(target_role)
+                      if target_role in requirements_df["Role"].tolist() else 0
+            )
+            c_skills = st.text_input("Skills (comma separated)", value=parsed_skills or "Python, SQL, Git")
+            c_exp    = st.number_input("Years of Experience", min_value=0.0, max_value=30.0,
+                                       value=float(parsed_exp), step=0.5)
+
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                analyze_btn = st.form_submit_button("🤖 Analyze Resume Fit", type="primary", use_container_width=True)
+            with col_btn2:
+                save_btn = st.form_submit_button("💾 Confirm & Add to Candidate Pool", use_container_width=True)
+
+            # ---- Save candidate ----
+            if save_btn:
                 new_cand = {
                     "Name": c_name.strip(),
                     "Role Applied": c_role,
-                    "Skills": c_skills.strip(),
+                    "Skills":       c_skills.strip(),
                     "Experience_Years": float(c_exp),
-                    "Match_Score": 0,
-                    "Status": "Screening"
+                    "Match_Score":  0,
+                    "Status":       "Screening"
                 }
-                st.session_state["candidates_db"] = [c for c in st.session_state["candidates_db"] if c["Name"] != c_name.strip()]
+                st.session_state["candidates_db"] = [
+                    c for c in st.session_state["candidates_db"] if c["Name"] != c_name.strip()
+                ]
                 st.session_state["candidates_db"].append(new_cand)
-                
                 st.session_state["notifications"].insert(0, {
-                    "Message": f"Successfully parsed and loaded resume for {c_name}.",
+                    "Message": f"Resume for {c_name} added to candidate pool.",
                     "Time": "Just now",
                     "Read": False
                 })
@@ -212,6 +282,179 @@ def render_resume_upload(requirements_df):
                 st.session_state["nav_option"] = "Resume Analysis Report"
                 st.session_state["last_analyzed_candidate"] = c_name.strip()
                 safe_rerun()
+
+            # ---- AI Resume Fit Analysis ----
+            if analyze_btn:
+                role_req = requirements_df[requirements_df["Role"] == c_role]
+                if role_req.empty:
+                    st.error("Could not find job requirements for the selected role.")
+                else:
+                    req_row      = role_req.iloc[0]
+                    req_skills   = [s.strip().lower() for s in req_row["Required_Skills"].split(",")]
+                    min_exp      = int(req_row["Min_Experience"])
+                    cand_skills  = [s.strip().lower() for s in c_skills.split(",")]
+
+                    job_desc_summary    = f"Role: {c_role}. Required Skills: {', '.join(req_skills)}. Minimum Experience: {min_exp} years."
+                    resume_text_summary = (
+                        resume_text[:3000]  # cap at 3000 chars to avoid token overflow
+                        if len(resume_text) > 3000 else resume_text
+                    )
+
+                    with st.spinner("🤖 Running AI Resume Fit Analysis — please wait..."):
+                        match_result = resume_matching(
+                            resume_text=resume_text_summary,
+                            job_description=job_desc_summary
+                        )
+                        gap_result = skill_gap_analyser(
+                            candidate_skills=cand_skills,
+                            required_skills=req_skills,
+                            experience_years=float(c_exp),
+                            min_experience=min_exp
+                        )
+
+                    st.session_state["upload_match_result"] = match_result
+                    st.session_state["upload_gap_result"]   = gap_result
+                    st.session_state["upload_analysis_name"] = c_name
+                    st.session_state["upload_analysis_role"] = c_role
+
+        # ---- Show Analysis Results ----
+        if "upload_match_result" in st.session_state and "upload_gap_result" in st.session_state:
+            st.markdown("---")
+            st.markdown(f"## 📊 AI Fit Analysis: **{st.session_state.get('upload_analysis_name','')}** → *{st.session_state.get('upload_analysis_role','')}*")
+
+            # ---- Parse skill gap JSON ----
+            import json, re as _re
+            gap_raw    = st.session_state["upload_gap_result"]
+            match_text = st.session_state["upload_match_result"]
+            parsed_gap = None
+            try:
+                cleaned = _re.sub(r"```[\w]*\n?", "", gap_raw).strip()
+                parsed_gap = json.loads(cleaned)
+            except Exception:
+                parsed_gap = None
+
+            # ---- Hire Readiness Banner ----
+            if parsed_gap:
+                score  = parsed_gap.get("hire_readiness_score", 0)
+                label  = parsed_gap.get("hire_readiness_label", "Unknown")
+                exp_note = parsed_gap.get("experience_assessment", "")
+                verdict  = parsed_gap.get("overall_recommendation", "")
+
+                score_color = "#34d399" if score >= 75 else "#f59e0b" if score >= 50 else "#f87171"
+                st.markdown(
+                    f"""
+                    <div style="background:linear-gradient(135deg,rgba(30,41,59,.95),rgba(15,23,42,.98));
+                                border:2px solid {score_color}; border-radius:14px;
+                                padding:1.2rem 1.6rem; margin:0.8rem 0;
+                                display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.2rem;">AI HIRE READINESS</div>
+                            <div style="font-size:1.5rem;font-weight:800;color:{score_color};">{label}</div>
+                            <div style="font-size:0.88rem;color:#cbd5e1;margin-top:0.3rem;">{exp_note}</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:2.8rem;font-weight:900;color:{score_color};">{score}</div>
+                            <div style="font-size:0.72rem;color:#94a3b8;">/ 100 READINESS SCORE</div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                # Key Strengths
+                strengths_raw = parsed_gap.get("key_strengths", [])
+                strengths = [
+                    item if isinstance(item, dict) else {"skill": str(item), "note": ""}
+                    for item in strengths_raw
+                ]
+                if strengths:
+                    st.markdown("##### ⭐ Key Strengths")
+                    cols_s = st.columns(min(len(strengths), 3))
+                    for i, item in enumerate(strengths):
+                        with cols_s[i % 3]:
+                            st.markdown(
+                                f"""<div style="background:rgba(52,211,153,.07);border:1px solid #059669;
+                                    border-radius:10px;padding:0.8rem;margin-bottom:0.5rem;">
+                                    <div style="color:#34d399;font-weight:700;font-size:0.9rem;">✅ {item.get('skill','')}</div>
+                                    <div style="color:#94a3b8;font-size:0.8rem;margin-top:0.3rem;">{item.get('note','')}</div>
+                                </div>""",
+                                unsafe_allow_html=True
+                            )
+
+                # Growth Areas
+                growth_raw = parsed_gap.get("growth_areas", [])
+                growth_areas = [
+                    item if isinstance(item, dict)
+                    else {"skill": str(item), "severity": "Medium", "gap_note": "", "recommendation": "", "time_to_bridge": "N/A"}
+                    for item in growth_raw
+                ]
+                if growth_areas:
+                    st.markdown("##### ⚠️ Skill Gaps & Training Roadmap")
+                    severity_colors = {
+                        "Critical": ("#f87171", "#7f1d1d"),
+                        "High":     ("#fb923c", "#7c2d12"),
+                        "Medium":   ("#f59e0b", "#78350f"),
+                        "Low":      ("#a78bfa", "#3b0764"),
+                    }
+                    for gap in growth_areas:
+                        sev     = gap.get("severity", "Medium")
+                        color, bg = severity_colors.get(sev, ("#94a3b8", "#1e293b"))
+                        g_skill = gap.get("skill", "")
+                        g_note  = gap.get("gap_note", "")
+                        g_rec   = gap.get("recommendation", "")
+                        g_time  = gap.get("time_to_bridge", "N/A")
+                        st.markdown(
+                            f"""<div style="background:rgba(30,41,59,.6);border-left:5px solid {color};
+                                border-radius:0 10px 10px 0;padding:0.9rem 1.2rem;margin-bottom:0.7rem;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+                                    <span style="color:#f8fafc;font-weight:700;">❌ {g_skill}</span>
+                                    <span style="background:{bg};color:{color};border:1px solid {color};
+                                          border-radius:20px;padding:0.1rem 0.6rem;font-size:0.73rem;font-weight:700;">{sev.upper()}</span>
+                                </div>
+                                <div style="color:#94a3b8;font-size:0.83rem;margin-bottom:0.5rem;">{g_note}</div>
+                                <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
+                                    <div style="background:rgba(59,130,246,.1);border:1px solid #3b82f6;
+                                         border-radius:6px;padding:0.35rem 0.65rem;flex:1;min-width:180px;">
+                                        <div style="color:#60a5fa;font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;">📚 RECOMMENDED ACTION</div>
+                                        <div style="color:#cbd5e1;font-size:0.8rem;">{g_rec}</div>
+                                    </div>
+                                    <div style="background:rgba(167,139,250,.1);border:1px solid #a78bfa;
+                                         border-radius:6px;padding:0.35rem 0.65rem;min-width:110px;text-align:center;">
+                                        <div style="color:#c4b5fd;font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;">⏱ TIME TO BRIDGE</div>
+                                        <div style="color:#e9d5ff;font-size:0.82rem;font-weight:700;">{g_time}</div>
+                                    </div>
+                                </div>
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
+
+                # Recruiter Verdict
+                if verdict:
+                    st.markdown(
+                        f"""<div style="background:rgba(59,130,246,.07);border:1px solid #3b82f6;
+                            border-radius:12px;padding:1rem 1.4rem;margin-top:0.8rem;">
+                            <div style="color:#60a5fa;font-weight:700;font-size:0.82rem;margin-bottom:0.4rem;">🧠 AI RECRUITER VERDICT</div>
+                            <div style="color:#cbd5e1;font-size:0.9rem;line-height:1.6;">{verdict}</div>
+                        </div>""",
+                        unsafe_allow_html=True
+                    )
+            else:
+                # JSON parse failed — show raw gap output
+                st.markdown("##### ⚠️ AI Skill Gap Output")
+                st.info(gap_raw)
+
+            # ---- Resume Match Summary (always show) ----
+            st.markdown("---")
+            st.markdown("##### 📄 AI Resume Match Summary")
+            st.markdown(
+                f"""<div style="background:rgba(30,41,59,.5);border:1px solid #334155;
+                    border-radius:12px;padding:1.2rem;color:#cbd5e1;font-size:0.92rem;line-height:1.7;">
+                    {match_text}
+                </div>""",
+                unsafe_allow_html=True
+            )
+
+
 
 def render_resume_analysis(candidates_df, requirements_df):
     st.markdown("### 📊 AI Resume Analysis Report")
@@ -267,31 +510,177 @@ def render_resume_analysis(candidates_df, requirements_df):
         else:
             st.info(f"Recommended Upskilling: Suggest candidate completes certifications or projects in: **{', '.join(missing).upper()}**.")
             
-        col_s, col_w = st.columns(2)
-        with col_s:
-            st.markdown(
-                """
-                <div style="background-color:rgba(52, 211, 153, 0.05); padding:1rem; border-radius:8px; border:1px solid #059669;">
-                    <strong style="color:#34d399;">⭐ Key Strengths</strong>
-                    <ul style="color:#cbd5e1; font-size:0.85rem; margin-top:0.4rem; padding-left:1rem;">
-                        <li>Has relevant experience matching the title.</li>
-                        <li>Possesses critical skills like Git.</li>
-                    </ul>
-                </div>
-                """, unsafe_allow_html=True
-            )
-        with col_w:
-            st.markdown(
-                """
-                <div style="background-color:rgba(248, 113, 113, 0.05); padding:1rem; border-radius:8px; border:1px solid #dc2626;">
-                    <strong style="color:#f87171;">⚠️ Growth Areas</strong>
-                    <ul style="color:#cbd5e1; font-size:0.85rem; margin-top:0.4rem; padding-left:1rem;">
-                        <li>Verify deep implementation capability of skills.</li>
-                        <li>Address missing skill prerequisites.</li>
-                    </ul>
-                </div>
-                """, unsafe_allow_html=True
-            )
+        # Check cache
+        if "ai_analysis_cache" not in st.session_state:
+            st.session_state["ai_analysis_cache"] = {}
+        cache = st.session_state["ai_analysis_cache"].get(selected_name, {})
+        
+        if st.button("🤖 Run AI Skill Gap Analysis", key=f"run_ai_{selected_name}", use_container_width=True, type="primary"):
+            with st.spinner("Running deep AI analysis — this may take 10-20 seconds..."):
+                gap_res = skill_gap_analyser(
+                    candidate_skills=c_skills,
+                    required_skills=req_skills,
+                    experience_years=cand_data['Experience_Years'],
+                    min_experience=min_exp
+                )
+                resume_text_summary = f"Candidate Name: {selected_name}. Role Applied: {role_applied}. Skills: {cand_data['Skills']}. Experience: {cand_data['Experience_Years']} years."
+                job_desc_summary = f"Required Skills: {', '.join(req_skills)}. Minimum Experience: {min_exp} years."
+                match_res = resume_matching(resume_text=resume_text_summary, job_description=job_desc_summary)
+                
+                cache = {
+                    "skill_gap": gap_res,
+                    "match_summary": match_res
+                }
+                st.session_state["ai_analysis_cache"][selected_name] = cache
+                safe_rerun()
+
+        # ---- Render rich AI output ----
+        if cache and "skill_gap" in cache:
+            raw_json = cache["skill_gap"]
+            parsed = None
+            try:
+                import json, re
+                # Strip markdown fences if model wraps in ```json ... ```
+                cleaned = re.sub(r"```[\w]*\n?", "", raw_json).strip()
+                parsed = json.loads(cleaned)
+            except Exception:
+                parsed = None
+
+            if parsed:
+                # ---- Hire Readiness Banner ----
+                score = parsed.get("hire_readiness_score", 0)
+                label = parsed.get("hire_readiness_label", "Unknown")
+                exp_note = parsed.get("experience_assessment", "")
+                verdict = parsed.get("overall_recommendation", "")
+
+                score_color = (
+                    "#34d399" if score >= 75 else
+                    "#f59e0b" if score >= 50 else
+                    "#f87171"
+                )
+                st.markdown(
+                    f"""
+                    <div style="background: linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));
+                                border: 2px solid {score_color}; border-radius: 14px;
+                                padding: 1.2rem 1.6rem; margin: 1rem 0; display: flex;
+                                justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:0.2rem;">AI HIRE READINESS</div>
+                            <div style="font-size:1.6rem; font-weight:800; color:{score_color};">{label}</div>
+                            <div style="font-size:0.9rem; color:#cbd5e1; margin-top:0.3rem;">{exp_note}</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:3rem; font-weight:900; color:{score_color};">{score}</div>
+                            <div style="font-size:0.75rem; color:#94a3b8;">/ 100 READINESS SCORE</div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                # ---- Key Strengths ----
+                strengths_raw = parsed.get("key_strengths", [])
+                # Normalise: model may return strings or dicts
+                strengths = [
+                    item if isinstance(item, dict) else {"skill": str(item), "note": ""}
+                    for item in strengths_raw
+                ]
+                if strengths:
+                    st.markdown("##### ⭐ Key Strengths")
+                    cols_str = st.columns(min(len(strengths), 3))
+                    for i, item in enumerate(strengths):
+                        with cols_str[i % 3]:
+                            skill_name = item.get("skill", str(item))
+                            skill_note = item.get("note", "")
+                            st.markdown(
+                                f"""
+                                <div style="background:rgba(52,211,153,0.07); border:1px solid #059669;
+                                            border-radius:10px; padding:0.8rem; margin-bottom:0.5rem;">
+                                    <div style="color:#34d399; font-weight:700; font-size:0.9rem;">✅ {skill_name}</div>
+                                    <div style="color:#94a3b8; font-size:0.8rem; margin-top:0.3rem;">{skill_note}</div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+
+                # ---- Growth Areas with Severity ----
+                growth_raw = parsed.get("growth_areas", [])
+                # Normalise: model may return strings or dicts
+                growth_areas = [
+                    item if isinstance(item, dict)
+                    else {"skill": str(item), "severity": "Medium", "gap_note": "", "recommendation": "", "time_to_bridge": "N/A"}
+                    for item in growth_raw
+                ]
+                if growth_areas:
+                    st.markdown("##### ⚠️ Skill Gap Analysis & Training Roadmap")
+                    severity_colors = {
+                        "Critical": ("#f87171", "#7f1d1d"),
+                        "High":     ("#fb923c", "#7c2d12"),
+                        "Medium":   ("#f59e0b", "#78350f"),
+                        "Low":      ("#a78bfa", "#3b0764"),
+                    }
+                    for gap in growth_areas:
+                        sev = gap.get("severity", "Medium") if isinstance(gap, dict) else "Medium"
+                        color, bg = severity_colors.get(sev, ("#94a3b8", "#1e293b"))
+                        g_skill   = gap.get("skill", "") if isinstance(gap, dict) else str(gap)
+                        g_note    = gap.get("gap_note", "") if isinstance(gap, dict) else ""
+                        g_rec     = gap.get("recommendation", "") if isinstance(gap, dict) else ""
+                        g_time    = gap.get("time_to_bridge", "N/A") if isinstance(gap, dict) else "N/A"
+                        st.markdown(
+                            f"""
+                            <div style="background:rgba(30,41,59,0.6); border-left:5px solid {color};
+                                        border-radius:0 10px 10px 0; padding:0.9rem 1.2rem; margin-bottom:0.7rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                                    <span style="color:#f8fafc; font-weight:700; font-size:1rem;">❌ {g_skill}</span>
+                                    <span style="background:{bg}; color:{color}; border:1px solid {color};
+                                                 border-radius:20px; padding:0.15rem 0.7rem;
+                                                 font-size:0.75rem; font-weight:700;">{sev.upper()}</span>
+                                </div>
+                                <div style="color:#94a3b8; font-size:0.85rem; margin-bottom:0.5rem;">{g_note}</div>
+                                <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                                    <div style="background:rgba(59,130,246,0.1); border:1px solid #3b82f6;
+                                                border-radius:6px; padding:0.4rem 0.7rem; flex:1; min-width:200px;">
+                                        <div style="color:#60a5fa; font-size:0.72rem; font-weight:600; margin-bottom:0.2rem;">📚 RECOMMENDED ACTION</div>
+                                        <div style="color:#cbd5e1; font-size:0.82rem;">{g_rec}</div>
+                                    </div>
+                                    <div style="background:rgba(167,139,250,0.1); border:1px solid #a78bfa;
+                                                border-radius:6px; padding:0.4rem 0.7rem; min-width:120px; text-align:center;">
+                                        <div style="color:#c4b5fd; font-size:0.72rem; font-weight:600; margin-bottom:0.2rem;">⏱ TIME TO BRIDGE</div>
+                                        <div style="color:#e9d5ff; font-size:0.85rem; font-weight:700;">{g_time}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+                # ---- Recruiter Verdict ----
+                if verdict:
+                    st.markdown(
+                        f"""
+                        <div style="background:rgba(59,130,246,0.07); border:1px solid #3b82f6;
+                                    border-radius:12px; padding:1rem 1.4rem; margin-top:1rem;">
+                            <div style="color:#60a5fa; font-weight:700; font-size:0.85rem; margin-bottom:0.4rem;">🧠 AI RECRUITER VERDICT</div>
+                            <div style="color:#cbd5e1; font-size:0.92rem; line-height:1.6;">{verdict}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+            else:
+                # Fallback: raw text display if JSON parse fails
+                st.markdown("**AI Analysis Output:**")
+                st.info(raw_json)
+
+        elif not cache:
+            st.info("Click **'🤖 Run AI Skill Gap Analysis'** above to generate a full recruiter-grade AI analysis.")
+
+        st.write("")
+        with st.expander("🤖 AI Resume Match Summary", expanded=False):
+            if cache and "match_summary" in cache:
+                st.write(cache["match_summary"])
+            else:
+                st.info("Click 'Run AI Skill Gap Analysis' to generate AI Resume Match Summary.")
+
             
     with col_an_2:
         st.markdown("#### 🎯 Overall Match Score")
@@ -323,6 +712,38 @@ def render_resume_analysis(candidates_df, requirements_df):
             margin=dict(t=30, b=10, l=10, r=10)
         )
         st.plotly_chart(fig, use_container_width=True)
+
+    if "resume_chat_history" not in st.session_state:
+        st.session_state["resume_chat_history"] = {}
+    if selected_name not in st.session_state["resume_chat_history"]:
+        st.session_state["resume_chat_history"][selected_name] = []
+        
+    chat_history = st.session_state["resume_chat_history"][selected_name]
+    
+    st.markdown("---")
+    st.markdown("### 💬 Ask AI About This Candidate")
+    
+    for msg in chat_history:
+        bubble_class = "chat-bubble-user" if msg["role"] == "user" else "chat-bubble-assistant"
+        st.markdown(f'<div class="{bubble_class}">{msg["content"]}</div>', unsafe_allow_html=True)
+        
+    chat_col1, chat_col2 = st.columns([4, 1])
+    with chat_col1:
+        question_input = st.text_input(
+            "Ask a question about this candidate...",
+            key=f"q_input_{selected_name}",
+            placeholder="e.g. Does this candidate have experience leading teams?"
+        )
+    with chat_col2:
+        ask_clicked = st.button("Ask", key=f"ask_btn_{selected_name}", use_container_width=True)
+        
+    if ask_clicked and question_input.strip():
+        chat_history.append({"role": "user", "content": question_input.strip()})
+        resume_text_summary = f"Candidate Name: {selected_name}. Role Applied: {role_applied}. Skills: {cand_data['Skills']}. Experience: {cand_data['Experience_Years']} years."
+        with st.spinner("Asking AI..."):
+            ans = resume_chat(candidate_context=resume_text_summary, question=question_input.strip())
+        chat_history.append({"role": "assistant", "content": ans})
+        safe_rerun()
 
 def render_job_description_generator():
     st.markdown("### ✍️ AI Job Description Generator")
@@ -461,67 +882,106 @@ def render_interview_feedback(candidates_df):
         st.warning("No candidates available.")
         return
         
-    with st.form("feedback_form"):
-        selected_cand = st.selectbox("Select Candidate Evaluated", cand_names)
-        interviewer = st.text_input("Interviewer Name", placeholder="e.g. Rachel Adams")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            tech_rating = st.slider("Technical Capability Rating (1-5)", 1, 5, 3)
-        with col2:
-            comm_rating = st.slider("Communication Skills Rating (1-5)", 1, 5, 3)
-        with col3:
-            cult_rating = st.slider("Cultural Alignment Rating (1-5)", 1, 5, 3)
+    tab_manual, tab_ai = st.tabs(["Manual Scorecard", "AI Discussion Analyzer"])
+    
+    with tab_manual:
+        with st.form("feedback_form"):
+            selected_cand = st.selectbox("Select Candidate Evaluated", cand_names)
+            interviewer = st.text_input("Interviewer Name", placeholder="e.g. Rachel Adams")
             
-        feedback_comments = st.text_area("Detailed Interview Remarks")
-        recommendation = st.selectbox("Final Hiring Outcome Recommendation", ["Hire", "Hold", "No Hire"])
-        
-        submit_feedback = st.form_submit_button("Submit Evaluation Scorecard", type="primary")
-        
-    if submit_feedback:
-        if not interviewer.strip() or not feedback_comments.strip():
-            st.error("Please enter both Interviewer Name and Comments.")
-        else:
-            c_row = candidates_df[candidates_df["Name"] == selected_cand].iloc[0]
-            new_fb = {
-                "Name": selected_cand,
-                "Role": c_row["Role Applied"],
-                "Interviewer": interviewer.strip(),
-                "Technical": int(tech_rating),
-                "Communication": int(comm_rating),
-                "Culture": int(cult_rating),
-                "Comments": feedback_comments.strip(),
-                "Outcome": recommendation
-            }
-            st.session_state["interview_feedback"].append(new_fb)
-            
-            if recommendation == "Hire":
-                for c in st.session_state["candidates_db"]:
-                    if c["Name"] == selected_cand:
-                        c["Status"] = "Offered"
-                        break
-                st.info(f"AI Suggestion: Candidate **{selected_cand}** status updated to 'Offered' due to 'Hire' feedback.")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                tech_rating = st.slider("Technical Capability Rating (1-5)", 1, 5, 3)
+            with col2:
+                comm_rating = st.slider("Communication Skills Rating (1-5)", 1, 5, 3)
+            with col3:
+                cult_rating = st.slider("Cultural Alignment Rating (1-5)", 1, 5, 3)
                 
-            st.session_state["notifications"].insert(0, {
-                "Message": f"Interview scorecard submitted by {interviewer.strip()} for {selected_cand}.",
-                "Time": "Just now",
-                "Read": False
-            })
-            st.success("Interview feedback logged successfully!")
-            safe_rerun()
+            feedback_comments = st.text_area("Detailed Interview Remarks")
+            recommendation = st.selectbox("Final Hiring Outcome Recommendation", ["Hire", "Hold", "No Hire"])
             
-    st.markdown("---")
-    st.markdown("#### Active Feedback Submissions")
-    if len(st.session_state["interview_feedback"]) == 0:
-        st.info("No interview scorecards have been recorded yet.")
-    else:
-        fb_df = pd.DataFrame(st.session_state["interview_feedback"])
-        st.dataframe(fb_df, use_container_width=True, hide_index=True)
+            submit_feedback = st.form_submit_button("Submit Evaluation Scorecard", type="primary")
+            
+        if submit_feedback:
+            if not interviewer.strip() or not feedback_comments.strip():
+                st.error("Please enter both Interviewer Name and Comments.")
+            else:
+                c_row = candidates_df[candidates_df["Name"] == selected_cand].iloc[0]
+                new_fb = {
+                    "Name": selected_cand,
+                    "Role": c_row["Role Applied"],
+                    "Interviewer": interviewer.strip(),
+                    "Technical": int(tech_rating),
+                    "Communication": int(comm_rating),
+                    "Culture": int(cult_rating),
+                    "Comments": feedback_comments.strip(),
+                    "Outcome": recommendation
+                }
+                st.session_state["interview_feedback"].append(new_fb)
+                
+                if recommendation == "Hire":
+                    for c in st.session_state["candidates_db"]:
+                        if c["Name"] == selected_cand:
+                            c["Status"] = "Offered"
+                            break
+                    st.info(f"AI Suggestion: Candidate **{selected_cand}** status updated to 'Offered' due to 'Hire' feedback.")
+                    
+                st.session_state["notifications"].insert(0, {
+                    "Message": f"Interview scorecard submitted by {interviewer.strip()} for {selected_cand}.",
+                    "Time": "Just now",
+                    "Read": False
+                })
+                st.success("Interview feedback logged successfully!")
+                safe_rerun()
+                
+        st.markdown("---")
+        st.markdown("#### Active Feedback Submissions")
+        if len(st.session_state["interview_feedback"]) == 0:
+            st.info("No interview scorecards have been recorded yet.")
+        else:
+            fb_df = pd.DataFrame(st.session_state["interview_feedback"])
+            st.dataframe(fb_df, use_container_width=True, hide_index=True)
+            
+    with tab_ai:
+        ai_selected_cand = st.selectbox("Select Candidate for Discussion Analysis", cand_names, key="ai_feedback_cand")
+        transcript = st.text_area("Paste interview transcript or conversation notes", placeholder="e.g. Recruiter: Tell me about your background...\nCandidate: I have worked on React for 3 years...", height=200)
+        
+        if "ai_discussion_analysis" not in st.session_state:
+            st.session_state["ai_discussion_analysis"] = {}
+            
+        if st.button("Analyze Discussion", key="ai_discussion_btn", use_container_width=True):
+            if not transcript.strip():
+                st.error("Please enter some transcript or interview notes to analyze.")
+            else:
+                with st.spinner("Analyzing discussion with AI..."):
+                    analysis_res = job_discussion_analyzer(transcript=transcript.strip())
+                st.session_state["ai_discussion_analysis"][ai_selected_cand] = analysis_res
+                safe_rerun()
+                
+        if ai_selected_cand in st.session_state["ai_discussion_analysis"]:
+            st.markdown("---")
+            st.markdown("#### AI Discussion Analysis Report")
+            st.markdown(st.session_state["ai_discussion_analysis"][ai_selected_cand])
 
 def render_offer_letter_generator(candidates_df):
-    st.markdown("### ✉️ AI Offer Letter Generator")
-    st.markdown("Generate official compensation packages and contract agreements for candidates recommended for hire.")
+    st.markdown("### ✉️ AI Offer Letter & Email Generator")
+    st.markdown("Generate official compensation packages, interview invitations, or candidate follow-up emails, and send them directly.")
     
+    email_type = st.selectbox("Email Type", [
+        "Offer Letter (AI Generated)", 
+        "Offer Letter (Standard Template)", 
+        "Interview Invite", 
+        "Rejection", 
+        "Follow-up"
+    ])
+    
+    if "current_email_type" not in st.session_state:
+        st.session_state["current_email_type"] = email_type
+    if st.session_state["current_email_type"] != email_type:
+        st.session_state["current_email_type"] = email_type
+        if "generated_ai_email" in st.session_state:
+            del st.session_state["generated_ai_email"]
+            
     cands_offered = [c["Name"] for c in st.session_state["candidates_db"] if c.get("Status") in ["Offered", "Hired"]]
     
     if not cands_offered:
@@ -529,22 +989,34 @@ def render_offer_letter_generator(candidates_df):
         cand_list = sorted(candidates_df["Name"].tolist())
     else:
         cand_list = cands_offered
-        
-    with st.form("offer_form"):
-        selected_cand = st.selectbox("Select Candidate for Offer", cand_list)
-        salary = st.text_input("Annual Gross Salary (CTC)", value="₹12,0,000")
-        joining_date = st.date_input("Joining Date", datetime.date.today() + datetime.timedelta(days=14))
-        reporting_mgr = st.text_input("Reporting Manager", value="Amit Sen (VP of Engineering)")
-        work_mode = st.selectbox("Work Location Arrangement", ["Remote", "Hybrid (2 days Office)", "Onsite / Office"])
-        
-        generate_offer = st.form_submit_button("Generate Official Contract", type="primary")
-        
-    if generate_offer:
+
+    # Recruiter inputs candidate details
+    selected_cand = st.selectbox("Select Candidate", cand_list)
+    
+    # Editable Candidate Email ID input (Prefills dynamically based on selection)
+    default_email = f"{selected_cand.lower().replace(' ', '')}@example.com"
+    candidate_email = st.text_input("Candidate Email ID", value=default_email)
+    
+    is_offer_letter = email_type in ["Offer Letter (AI Generated)", "Offer Letter (Standard Template)"]
+    
+    if is_offer_letter:
+        with st.form("offer_form"):
+            salary = st.text_input("Annual Gross Salary (CTC)", value="₹12,0,000")
+            joining_date = st.date_input("Joining Date", datetime.date.today() + datetime.timedelta(days=14))
+            reporting_mgr = st.text_input("Reporting Manager", value="Amit Sen (VP of Engineering)")
+            work_mode = st.selectbox("Work Location Arrangement", ["Remote", "Hybrid (2 days Office)", "Onsite / Office"])
+            generate_btn = st.form_submit_button("Generate Offer Letter", type="primary")
+    else:
+        with st.form("ai_email_form"):
+            context = st.text_area("Optional Context / Custom Message", placeholder="e.g. Schedule for Wednesday at 10 AM, include HR round details")
+            generate_btn = st.form_submit_button("Generate Email Content", type="primary")
+            
+    if generate_btn:
         c_row = candidates_df[candidates_df["Name"] == selected_cand].iloc[0]
         c_role = c_row["Role Applied"]
         
-        offer_template = f"""
-# OFFICIAL EMPLOYMENT CONTRACT & LETTER OF OFFER
+        if email_type == "Offer Letter (Standard Template)":
+            offer_text = f"""# OFFICIAL EMPLOYMENT CONTRACT & LETTER OF OFFER
 
 **Date**: {datetime.date.today().strftime("%B %d, %Y")}  
 **Ref Number**: TN/OFF/{selected_cand.upper().replace(" ", "")[:4]}/2026  
@@ -566,32 +1038,177 @@ Please signify your acceptance of this offer by signing and returning the duplic
 
 Sincerely,  
 **HR Operations Team**  
-*Talent Copilot Corp*
-        """
-        
+*Talent Copilot Corp*"""
+            st.session_state["generated_ai_email"] = offer_text
+            
+            offer_record = {
+                "Name": selected_cand,
+                "Role": c_role,
+                "Salary": salary,
+                "StartDate": str(joining_date),
+                "Mode": work_mode,
+                "Status": "Sent"
+            }
+            st.session_state["offer_letters"] = [ol for ol in st.session_state["offer_letters"] if ol["Name"] != selected_cand]
+            st.session_state["offer_letters"].append(offer_record)
+            st.session_state["last_offered_candidate"] = selected_cand
+            
+        elif email_type == "Offer Letter (AI Generated)":
+            with st.spinner("Generating professional AI offer letter..."):
+                offer_context = (
+                    f"Position: {c_role}\n"
+                    f"Salary CTC: {salary}\n"
+                    f"Joining Date: {joining_date.strftime('%B %d, %Y')}\n"
+                    f"Reporting Manager: {reporting_mgr}\n"
+                    f"Work Arrangement: {work_mode}\n"
+                    f"Include details of a 3-month probation and standard corporate benefits in a highly polished business format."
+                )
+                email_text = email_generator(
+                    candidate_name=selected_cand,
+                    email_type="Employment Offer Letter",
+                    context=offer_context
+                )
+                st.session_state["generated_ai_email"] = email_text
+                
+                offer_record = {
+                    "Name": selected_cand,
+                    "Role": c_role,
+                    "Salary": salary,
+                    "StartDate": str(joining_date),
+                    "Mode": work_mode,
+                    "Status": "Sent"
+                }
+                st.session_state["offer_letters"] = [ol for ol in st.session_state["offer_letters"] if ol["Name"] != selected_cand]
+                st.session_state["offer_letters"].append(offer_record)
+                st.session_state["last_offered_candidate"] = selected_cand
+                
+        else:
+            with st.spinner(f"Generating {email_type}..."):
+                email_text = email_generator(
+                    candidate_name=selected_cand,
+                    email_type=email_type,
+                    context=context.strip()
+                )
+                st.session_state["generated_ai_email"] = email_text
+
+    if "generated_ai_email" in st.session_state:
         st.markdown("---")
-        st.markdown("#### Contract Preview Panel")
-        st.markdown(
-            f'<div style="background-color: #1e293b; padding: 2.5rem; border-radius: 12px; border: 2px dashed #475569; font-family: Courier; color: #cbd5e1;">{offer_template}</div>', 
-            unsafe_allow_html=True
+        st.markdown("#### Preview and Edit Generated Content")
+        
+        # Recruiter can live-edit the email body in this text area
+        edited_email_body = st.text_area(
+            "Review / Customize Email Body:", 
+            value=st.session_state["generated_ai_email"], 
+            height=350,
+            key="edited_email_body_text"
         )
         
-        offer_record = {
-            "Name": selected_cand,
-            "Role": c_role,
-            "Salary": salary,
-            "StartDate": str(joining_date),
-            "Mode": work_mode,
-            "Status": "Sent"
-        }
-        st.session_state["offer_letters"] = [ol for ol in st.session_state["offer_letters"] if ol["Name"] != selected_cand]
-        st.session_state["offer_letters"].append(offer_record)
-        st.success(f"Offer contract generated for **{selected_cand}**!")
-        st.session_state["last_offered_candidate"] = selected_cand
+        # Save updates to session state
+        st.session_state["generated_ai_email"] = edited_email_body
+        
+        # ---- SMTP Configuration (persisted to session_state to survive reruns) ----
+        with st.expander("⚙️ SMTP Mail Server Configuration (Optional)", expanded=False):
+            st.markdown("Enter your SMTP credentials to send real emails to candidates. Leave blank to use **Simulation Mode**.")
+            col_smtp1, col_smtp2 = st.columns([3, 1])
+            with col_smtp1:
+                smtp_host = st.text_input(
+                    "SMTP Host", 
+                    value=st.session_state.get("smtp_host", "smtp.gmail.com"),
+                    key="smtp_host_input"
+                )
+            with col_smtp2:
+                smtp_port = st.number_input(
+                    "Port", min_value=1, max_value=65535,
+                    value=st.session_state.get("smtp_port", 587),
+                    key="smtp_port_input"
+                )
+            smtp_user = st.text_input(
+                "SMTP Username / Sender Email",
+                value=st.session_state.get("smtp_user", ""),
+                placeholder="e.g. recruiter@gmail.com",
+                key="smtp_user_input"
+            )
+            smtp_password = st.text_input(
+                "App Password",
+                value=st.session_state.get("smtp_password", ""),
+                type="password",
+                placeholder="Gmail App Password (spaces allowed)",
+                key="smtp_password_input"
+            )
+            if st.button("💾 Save Credentials", key="save_smtp_creds"):
+                st.session_state["smtp_host"] = smtp_host
+                st.session_state["smtp_port"] = int(smtp_port)
+                st.session_state["smtp_user"] = smtp_user
+                st.session_state["smtp_password"] = smtp_password
+                st.success("SMTP credentials saved for this session!")
+
+        # ---- Resolve final SMTP values from session_state ----
+        final_smtp_host = st.session_state.get("smtp_host", "smtp.gmail.com")
+        final_smtp_port = int(st.session_state.get("smtp_port", 587))
+        final_smtp_user = st.session_state.get("smtp_user", "").strip()
+        final_smtp_pass = st.session_state.get("smtp_password", "").strip().replace(" ", "")
+
+        # ---- Send Email Button ----
+        if st.button("📨 Send Email to Candidate", type="primary", use_container_width=True):
+            if not candidate_email.strip():
+                st.error("Please enter a valid Candidate Email ID.")
+            else:
+                subject = (
+                    f"Employment Offer & Agreement – {selected_cand}"
+                    if is_offer_letter
+                    else f"Update on your application – {selected_cand}"
+                )
+
+                if final_smtp_user and final_smtp_pass:
+                    with st.spinner("Connecting to mail server and sending…"):
+                        try:
+                            import smtplib
+                            from email.mime.text import MIMEText
+                            from email.mime.multipart import MIMEMultipart
+
+                            msg = MIMEMultipart("alternative")
+                            msg["From"]    = final_smtp_user
+                            msg["To"]      = candidate_email.strip()
+                            msg["Subject"] = subject
+                            msg.attach(MIMEText(edited_email_body, "plain", "utf-8"))
+
+                            if final_smtp_port == 465:
+                                server = smtplib.SMTP_SSL(final_smtp_host, final_smtp_port, timeout=15)
+                            else:
+                                server = smtplib.SMTP(final_smtp_host, final_smtp_port, timeout=15)
+                                server.ehlo()
+                                server.starttls()
+                                server.ehlo()
+
+                            server.login(final_smtp_user, final_smtp_pass)
+                            server.sendmail(final_smtp_user, [candidate_email.strip()], msg.as_string())
+                            server.quit()
+
+                            st.success(f"🎉 Email successfully delivered to **{candidate_email.strip()}**!")
+                            st.session_state["notifications"].insert(0, {
+                                "Message": f"Email sent to {candidate_email.strip()} for candidate {selected_cand}.",
+                                "Time": "Just now",
+                                "Read": False
+                            })
+                        except Exception as e:
+                            st.error(f"❌ SMTP Error: {e}")
+                else:
+                    # Simulation Mode — no credentials provided
+                    st.info(
+                        f"**💡 Simulation Mode – No real email sent.**\n\n"
+                        f"To send a real email:\n"
+                        f"1. Expand ⚙️ SMTP Configuration above.\n"
+                        f"2. Enter your Gmail + App Password and click **Save Credentials**.\n"
+                        f"3. Then click **Send Email** again.\n\n"
+                        f"---\n"
+                        f"**Simulated delivery details:**\n"
+                        f"- **To**: `{candidate_email.strip()}`\n"
+                        f"- **Subject**: `{subject}`"
+                    )
 
     if "last_offered_candidate" in st.session_state:
         loc = st.session_state["last_offered_candidate"]
-        if st.button(f"Simulate Acceptance for {loc}", type="primary", use_container_width=True):
+        if st.button(f"Simulate Acceptance for {loc}", type="secondary", use_container_width=True):
             for c in st.session_state["candidates_db"]:
                 if c["Name"] == loc:
                     c["Status"] = "Hired"
@@ -734,6 +1351,20 @@ def render_decision_support(candidates_df, requirements_df):
         </div>
         """
         st.markdown(card_html, unsafe_allow_html=True)
+        
+        if st.button("🤖 Get AI Reasoning", key=f"ai_reason_{r['Name']}", use_container_width=True):
+            with st.spinner("Generating AI recommendation reasoning..."):
+                reason_text = hiring_recommendation(
+                    candidate_name=r['Name'],
+                    match_pct=r['Score'],
+                    experience=r['Experience'],
+                    grade=r['Grade'],
+                    gaps=gaps_str
+                )
+                st.session_state[f"ai_reason_text_{r['Name']}"] = reason_text
+                
+        if f"ai_reason_text_{r['Name']}" in st.session_state:
+            st.info(st.session_state[f"ai_reason_text_{r['Name']}"])
         
         if r["Gaps"]:
             st.markdown(f"📖 **AI Onboarding Upskill Course Suggested:** Program for onboarding **{r['Name']}**: Complete courses on *{gaps_str}*.")
@@ -1164,6 +1795,12 @@ with col_title:
 # Check if data successfully loaded before continuing
 if candidates_df is not None and requirements_df is not None:
     
+    # Precompute all_skills so it is globally available
+    all_skills = set()
+    for s_list in candidates_df["Skills"].dropna():
+        for skill in s_list.split(","):
+            all_skills.add(skill.strip())
+            
     # 1. Global Navigation in Sidebar
     st.sidebar.markdown("### Navigation Module")
     
@@ -1179,6 +1816,7 @@ if candidates_df is not None and requirements_df is not None:
         "AI Job Description Generator",
         "Recruitment Workflow / Hiring Pipeline",
         "Interview Feedback Page",
+        "AI Interview Question Generator",
         "Offer Letter Generator",
         "Employee Onboarding Page",
         "AI Recommendation / Decision Support",
@@ -1311,6 +1949,64 @@ if candidates_df is not None and requirements_df is not None:
     elif navigation_option == "Interview Feedback Page":
         render_interview_feedback(candidates_df_calc)
         
+    elif navigation_option == "AI Interview Question Generator":
+        st.markdown("### ❓ AI Interview Question Generator")
+        st.markdown("Generate highly customized technical, behavioral, and coding questions based on the candidate's target role and required skill focus.")
+        
+        q_role = st.selectbox("Job Role", roles, key="q_role_select")
+        q_experience = st.slider("Years of Experience", 0, 15, 3, key="q_exp_slider")
+        q_skills = st.multiselect("Skills to Focus on", options=sorted(list(all_skills)), key="q_skills_select")
+        q_difficulty = st.select_slider("Difficulty Level", ["Easy", "Medium", "Hard"], value="Medium", key="q_diff_slider")
+        
+        if st.button("Generate Questions", key="generate_questions_btn", use_container_width=True):
+            with st.spinner("Generating interview questions..."):
+                questions_out = interview_question_generator(
+                    role=q_role,
+                    experience=q_experience,
+                    skills=q_skills,
+                    difficulty=q_difficulty
+                )
+                st.session_state["generated_questions"] = questions_out
+                
+        if "generated_questions" in st.session_state:
+            st.markdown("---")
+            raw_text = st.session_state["generated_questions"]
+            
+            sections = {
+                "Technical Questions": "",
+                "HR Questions": "",
+                "Coding Questions": "",
+                "Scenario Questions": ""
+            }
+            
+            current_header = None
+            for line in raw_text.split("\n"):
+                lower_line = line.lower()
+                if "#### technical questions" in lower_line:
+                    current_header = "Technical Questions"
+                elif "#### hr questions" in lower_line:
+                    current_header = "HR Questions"
+                elif "#### coding questions" in lower_line:
+                    current_header = "Coding Questions"
+                elif "#### scenario questions" in lower_line:
+                    current_header = "Scenario Questions"
+                elif line.strip().startswith("####"):
+                    current_header = None
+                else:
+                    if current_header:
+                        sections[current_header] += line + "\n"
+                        
+            # If all sections are empty, we display the raw text as fallback
+            if not any(sections.values()):
+                st.markdown(raw_text)
+            else:
+                for header, content in sections.items():
+                    st.markdown(f"#### {header}")
+                    if content.strip():
+                        st.markdown(content.strip())
+                    else:
+                        st.info("No questions generated for this category.")
+        
     elif navigation_option == "Offer Letter Generator":
         render_offer_letter_generator(candidates_df_calc)
         
@@ -1416,6 +2112,22 @@ if candidates_df is not None and requirements_df is not None:
                                 })
                                 safe_rerun()
                     st.write("") # small spacing
+            
+            if not display_candidates.empty:
+                st.markdown("---")
+                if st.button("🤖 AI-Rank This Pool", key=f"ai_rank_pool_{selected_role}", use_container_width=True):
+                    lines = []
+                    for _, row in display_candidates.iterrows():
+                        lines.append(f"Name: {row['Name']}, Match Score: {row['Match_Score']}%, Experience: {row['Experience_Years']} years, Skills: {row['Skills']}")
+                    candidates_summary = "\n".join(lines)
+                    job_desc = f"Required Skills: {', '.join(required_skills)}. Minimum Experience: {min_experience} years."
+                    with st.spinner("AI is ranking candidates..."):
+                        rank_res = candidate_ranking(candidates_summary=candidates_summary, job_description=job_desc)
+                    st.session_state[f"ai_ranking_{selected_role}"] = rank_res
+                    
+                if f"ai_ranking_{selected_role}" in st.session_state:
+                    with st.expander("AI Ranking Rationale", expanded=True):
+                        st.markdown(st.session_state[f"ai_ranking_{selected_role}"])
                     
         # ------------------ TAB 2: COMPARISON & EXPLAINABILITY ------------------
         with tab_explain:
@@ -1733,6 +2445,21 @@ if candidates_df is not None and requirements_df is not None:
                 showlegend=True
             )
             st.plotly_chart(fig, use_container_width=True)
+            
+        st.markdown("---")
+        if st.button("🤖 Generate AI Recruitment Insight", key="ai_recruitment_insight", use_container_width=True):
+            rc = candidates_df["Role Applied"].value_counts()
+            with st.spinner("Analyzing pipeline and generating insights..."):
+                insight = recruitment_analysis(
+                    total_openings=len(requirements_df),
+                    total_applicants=len(candidates_df),
+                    total_shortlisted=len(st.session_state["shortlist"]),
+                    role_counts=rc.to_dict()
+                )
+            st.session_state["ai_pipeline_insight"] = insight
+            
+        if "ai_pipeline_insight" in st.session_state:
+            st.info(st.session_state["ai_pipeline_insight"])
 
     # ------------------ MODULE 3: JOB MANAGEMENT (CRUD) ------------------
     elif navigation_option == "Job Role Management (CRUD)":
@@ -2084,6 +2811,21 @@ if candidates_df is not None and requirements_df is not None:
             height=280
         )
         st.plotly_chart(fig_hist, use_container_width=True)
+        
+        st.markdown("---")
+        if st.button("🤖 Generate Organizational Talent Insight", key="ai_talent_insight", use_container_width=True):
+            band_counts_dict = dict(zip(band_counts["Band"], band_counts["Count"]))
+            avg_matches_dict = dict(zip(avg_matches["Role Applied"], avg_matches["Match_Score"]))
+            with st.spinner("Analyzing macro-level organizational talent data..."):
+                insight_res = talent_insight(
+                    avg_match_by_role=avg_matches_dict,
+                    experience_band_distribution=band_counts_dict
+                )
+            st.session_state["ai_org_talent_insight"] = insight_res
+            
+        if "ai_org_talent_insight" in st.session_state:
+            st.markdown("#### Organizational Talent Insight")
+            st.info(st.session_state["ai_org_talent_insight"])
 
     # ------------------ MODULE 8: EMPLOYEE DIRECTORY ------------------
     elif navigation_option == "Employee Directory":
@@ -2173,55 +2915,10 @@ if candidates_df is not None and requirements_df is not None:
             # Append user message
             st.session_state["chat_history"].append({"role": "user", "content": user_query})
             
-            # Simple simulation response parser
-            response = ""
-            query_lower = user_query.lower()
-            
-            if "top matched" in query_lower or "best candidate" in query_lower:
-                # Find top candidate
-                role_se = candidates_df_calc[candidates_df_calc["Role Applied"] == "Software Engineer"]
-                if not role_se.empty:
-                    top_se = role_se.iloc[0]
-                    response = f"The top matched candidate for **Software Engineer** is **{top_se['Name']}** with a Dynamic Match Score of **{top_se['Match_Score']}%** (Experience: {top_se['Experience_Years']} years)."
-                else:
-                    response = "I couldn't find any candidate applying for Software Engineer in the database."
-                    
-            elif "react" in query_lower:
-                react_cands = candidates_df_calc[candidates_df_calc["Skills"].str.lower().str.contains("react")]["Name"].tolist()
-                if react_cands:
-                    response = f"The candidates possessing **React** skills in the pool are: " + ", ".join([f"**{name}**" for name in react_cands]) + "."
-                else:
-                    response = "There are no candidates with React listed in their skill set."
-                    
-            elif "5 yrs" in query_lower or "5 years" in query_lower or "experience" in query_lower:
-                exp_cands = candidates_df_calc[candidates_df_calc["Experience_Years"].astype(float) >= 5.0]
-                if not exp_cands.empty:
-                    exp_names = exp_cands["Name"].tolist()
-                    response = f"Candidates with **5 or more years of experience** are: " + ", ".join([f"**{n}** ({exp_cands[exp_cands['Name']==n].iloc[0]['Experience_Years']} years)" for n in exp_names]) + "."
-                else:
-                    response = "No candidates in the database have 5 or more years of experience."
-                    
-            else:
-                # Default generic matching scan
-                matched_keywords = []
-                for skill in all_skills:
-                    if skill.lower() in query_lower:
-                        matched_keywords.append(skill)
-                        
-                if matched_keywords:
-                    # Filter candidates
-                    matched_names = []
-                    for idx, r in candidates_df.iterrows():
-                        skills_split = [s.strip().lower() for s in r["Skills"].split(",")]
-                        if any(kw.lower() in skills_split for kw in matched_keywords):
-                            matched_names.append(r["Name"])
-                            
-                    if matched_names:
-                        response = f"Based on your request, candidates matching skills ({', '.join(matched_keywords)}) are: " + ", ".join([f"**{n}**" for n in matched_names]) + "."
-                    else:
-                        response = f"I scanned for keywords ({', '.join(matched_keywords)}) but couldn't find matching candidates."
-                else:
-                    response = "I received your query. To help, you can search for candidates by role (e.g. Software Engineer), skills (e.g. React, SQL, Figma), or experience level!"
+            cols_to_use = ["Name", "Role Applied", "Skills", "Experience_Years", "Match_Score"]
+            candidates_context = candidates_df_calc[cols_to_use].to_string(index=False)
+            with st.spinner("AI is thinking..."):
+                response = chatbot_query(user_query=user_query, candidates_context=candidates_context)
                     
             st.session_state["chat_history"].append({"role": "assistant", "content": response})
             safe_rerun()
