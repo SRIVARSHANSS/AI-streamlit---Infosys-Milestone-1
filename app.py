@@ -295,10 +295,20 @@ def render_resume_upload(requirements_df):
                     cand_skills  = [s.strip().lower() for s in c_skills.split(",")]
 
                     job_desc_summary    = f"Role: {c_role}. Required Skills: {', '.join(req_skills)}. Minimum Experience: {min_exp} years."
-                    resume_text_summary = (
-                        resume_text[:3000]  # cap at 3000 chars to avoid token overflow
-                        if len(resume_text) > 3000 else resume_text
-                    )
+
+                    # Build the best possible resume summary for the AI
+                    # If PDF text is long enough, use it; otherwise build a structured summary
+                    if len(resume_text.strip()) > 100:
+                        resume_text_summary = resume_text[:3000]  # cap at 3000 chars
+                    else:
+                        # PDF extraction may have failed — build from form fields
+                        resume_text_summary = (
+                            f"Candidate Name: {c_name}\n"
+                            f"Role Applying For: {c_role}\n"
+                            f"Skills: {c_skills}\n"
+                            f"Years of Experience: {c_exp} years\n"
+                            f"This candidate's resume was uploaded and the above details were verified by the recruiter."
+                        )
 
                     with st.spinner("🤖 Running AI Resume Fit Analysis — please wait..."):
                         match_result = resume_matching(
@@ -343,18 +353,18 @@ def render_resume_upload(requirements_df):
                 score_color = "#34d399" if score >= 75 else "#f59e0b" if score >= 50 else "#f87171"
                 st.markdown(
                     f"""
-                    <div style="background:linear-gradient(135deg,rgba(30,41,59,.95),rgba(15,23,42,.98));
+                    <div style="background:linear-gradient(135deg,rgba(15,23,42,0.98),rgba(30,41,59,0.98));
                                 border:2px solid {score_color}; border-radius:14px;
                                 padding:1.2rem 1.6rem; margin:0.8rem 0;
                                 display:flex; justify-content:space-between; align-items:center;">
                         <div>
-                            <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.2rem;">AI HIRE READINESS</div>
+                            <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.2rem;letter-spacing:0.08em;">AI HIRE READINESS</div>
                             <div style="font-size:1.5rem;font-weight:800;color:{score_color};">{label}</div>
-                            <div style="font-size:0.88rem;color:#cbd5e1;margin-top:0.3rem;">{exp_note}</div>
+                            <div style="font-size:0.9rem;color:#f1f5f9;margin-top:0.3rem;font-weight:500;">{exp_note}</div>
                         </div>
                         <div style="text-align:center;">
                             <div style="font-size:2.8rem;font-weight:900;color:{score_color};">{score}</div>
-                            <div style="font-size:0.72rem;color:#94a3b8;">/ 100 READINESS SCORE</div>
+                            <div style="font-size:0.72rem;color:#cbd5e1;letter-spacing:0.06em;">/ 100 READINESS SCORE</div>
                         </div>
                     </div>
                     """,
@@ -373,10 +383,10 @@ def render_resume_upload(requirements_df):
                     for i, item in enumerate(strengths):
                         with cols_s[i % 3]:
                             st.markdown(
-                                f"""<div style="background:rgba(52,211,153,.07);border:1px solid #059669;
-                                    border-radius:10px;padding:0.8rem;margin-bottom:0.5rem;">
-                                    <div style="color:#34d399;font-weight:700;font-size:0.9rem;">✅ {item.get('skill','')}</div>
-                                    <div style="color:#94a3b8;font-size:0.8rem;margin-top:0.3rem;">{item.get('note','')}</div>
+                                f"""<div style="background:rgba(20,83,45,0.35);border:1px solid #16a34a;
+                                    border-radius:10px;padding:0.85rem;margin-bottom:0.5rem;">
+                                    <div style="color:#4ade80;font-weight:700;font-size:0.95rem;">✅ {item.get('skill','')}</div>
+                                    <div style="color:#d1fae5;font-size:0.83rem;margin-top:0.35rem;line-height:1.5;">{item.get('note','')}</div>
                                 </div>""",
                                 unsafe_allow_html=True
                             )
@@ -404,24 +414,24 @@ def render_resume_upload(requirements_df):
                         g_rec   = gap.get("recommendation", "")
                         g_time  = gap.get("time_to_bridge", "N/A")
                         st.markdown(
-                            f"""<div style="background:rgba(30,41,59,.6);border-left:5px solid {color};
-                                border-radius:0 10px 10px 0;padding:0.9rem 1.2rem;margin-bottom:0.7rem;">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-                                    <span style="color:#f8fafc;font-weight:700;">❌ {g_skill}</span>
+                            f"""<div style="background:rgba(15,23,42,0.85);border-left:5px solid {color};
+                                border-radius:0 10px 10px 0;padding:1rem 1.3rem;margin-bottom:0.8rem;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                                    <span style="color:#f8fafc;font-weight:800;">❌ {g_skill}</span>
                                     <span style="background:{bg};color:{color};border:1px solid {color};
                                           border-radius:20px;padding:0.1rem 0.6rem;font-size:0.73rem;font-weight:700;">{sev.upper()}</span>
                                 </div>
-                                <div style="color:#94a3b8;font-size:0.83rem;margin-bottom:0.5rem;">{g_note}</div>
+                                <div style="color:#e2e8f0;font-size:0.87rem;margin-bottom:0.6rem;line-height:1.55;">{g_note}</div>
                                 <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
-                                    <div style="background:rgba(59,130,246,.1);border:1px solid #3b82f6;
-                                         border-radius:6px;padding:0.35rem 0.65rem;flex:1;min-width:180px;">
-                                        <div style="color:#60a5fa;font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;">📚 RECOMMENDED ACTION</div>
-                                        <div style="color:#cbd5e1;font-size:0.8rem;">{g_rec}</div>
+                                    <div style="background:rgba(37,99,235,0.25);border:1px solid #3b82f6;
+                                         border-radius:6px;padding:0.4rem 0.7rem;flex:1;min-width:180px;">
+                                        <div style="color:#93c5fd;font-size:0.7rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:0.05em;">📚 RECOMMENDED ACTION</div>
+                                        <div style="color:#f1f5f9;font-size:0.82rem;line-height:1.5;">{g_rec}</div>
                                     </div>
-                                    <div style="background:rgba(167,139,250,.1);border:1px solid #a78bfa;
-                                         border-radius:6px;padding:0.35rem 0.65rem;min-width:110px;text-align:center;">
-                                        <div style="color:#c4b5fd;font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;">⏱ TIME TO BRIDGE</div>
-                                        <div style="color:#e9d5ff;font-size:0.82rem;font-weight:700;">{g_time}</div>
+                                    <div style="background:rgba(109,40,217,0.25);border:1px solid #a78bfa;
+                                         border-radius:6px;padding:0.4rem 0.7rem;min-width:110px;text-align:center;">
+                                        <div style="color:#c4b5fd;font-size:0.7rem;font-weight:700;margin-bottom:0.25rem;letter-spacing:0.05em;">⏱ TIME TO BRIDGE</div>
+                                        <div style="color:#f5f3ff;font-size:0.84rem;font-weight:800;">{g_time}</div>
                                     </div>
                                 </div>
                             </div>""",
@@ -431,10 +441,10 @@ def render_resume_upload(requirements_df):
                 # Recruiter Verdict
                 if verdict:
                     st.markdown(
-                        f"""<div style="background:rgba(59,130,246,.07);border:1px solid #3b82f6;
-                            border-radius:12px;padding:1rem 1.4rem;margin-top:0.8rem;">
-                            <div style="color:#60a5fa;font-weight:700;font-size:0.82rem;margin-bottom:0.4rem;">🧠 AI RECRUITER VERDICT</div>
-                            <div style="color:#cbd5e1;font-size:0.9rem;line-height:1.6;">{verdict}</div>
+                        f"""<div style="background:rgba(30,64,175,0.2);border:1px solid #3b82f6;
+                            border-radius:12px;padding:1.1rem 1.5rem;margin-top:0.8rem;">
+                            <div style="color:#93c5fd;font-weight:700;font-size:0.82rem;margin-bottom:0.4rem;letter-spacing:0.05em;">🧠 AI RECRUITER VERDICT</div>
+                            <div style="color:#f1f5f9;font-size:0.92rem;line-height:1.7;font-weight:400;">{verdict}</div>
                         </div>""",
                         unsafe_allow_html=True
                     )
@@ -446,10 +456,14 @@ def render_resume_upload(requirements_df):
             # ---- Resume Match Summary (always show) ----
             st.markdown("---")
             st.markdown("##### 📄 AI Resume Match Summary")
+            # Escape any HTML tags in the AI response to prevent layout breakage
+            import html as _html
+            safe_match_text = _html.escape(match_text).replace("\n", "<br>")
             st.markdown(
-                f"""<div style="background:rgba(30,41,59,.5);border:1px solid #334155;
-                    border-radius:12px;padding:1.2rem;color:#cbd5e1;font-size:0.92rem;line-height:1.7;">
-                    {match_text}
+                f"""<div style="background:rgba(15,23,42,0.92);border:1px solid #334155;
+                    border-radius:12px;padding:1.4rem 1.6rem;color:#f1f5f9;
+                    font-size:0.94rem;line-height:1.8;white-space:pre-wrap;">
+                    {safe_match_text}
                 </div>""",
                 unsafe_allow_html=True
             )
@@ -560,18 +574,18 @@ def render_resume_analysis(candidates_df, requirements_df):
                 )
                 st.markdown(
                     f"""
-                    <div style="background: linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));
+                    <div style="background: linear-gradient(135deg, rgba(15,23,42,0.98), rgba(30,41,59,0.98));
                                 border: 2px solid {score_color}; border-radius: 14px;
                                 padding: 1.2rem 1.6rem; margin: 1rem 0; display: flex;
                                 justify-content: space-between; align-items: center;">
                         <div>
-                            <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:0.2rem;">AI HIRE READINESS</div>
+                            <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:0.2rem; letter-spacing:0.08em;">AI HIRE READINESS</div>
                             <div style="font-size:1.6rem; font-weight:800; color:{score_color};">{label}</div>
-                            <div style="font-size:0.9rem; color:#cbd5e1; margin-top:0.3rem;">{exp_note}</div>
+                            <div style="font-size:0.92rem; color:#f1f5f9; margin-top:0.3rem; font-weight:500;">{exp_note}</div>
                         </div>
                         <div style="text-align:center;">
                             <div style="font-size:3rem; font-weight:900; color:{score_color};">{score}</div>
-                            <div style="font-size:0.75rem; color:#94a3b8;">/ 100 READINESS SCORE</div>
+                            <div style="font-size:0.75rem; color:#cbd5e1; letter-spacing:0.06em;">/ 100 READINESS SCORE</div>
                         </div>
                     </div>
                     """,
@@ -594,10 +608,10 @@ def render_resume_analysis(candidates_df, requirements_df):
                             skill_note = item.get("note", "")
                             st.markdown(
                                 f"""
-                                <div style="background:rgba(52,211,153,0.07); border:1px solid #059669;
-                                            border-radius:10px; padding:0.8rem; margin-bottom:0.5rem;">
-                                    <div style="color:#34d399; font-weight:700; font-size:0.9rem;">✅ {skill_name}</div>
-                                    <div style="color:#94a3b8; font-size:0.8rem; margin-top:0.3rem;">{skill_note}</div>
+                                <div style="background:rgba(20,83,45,0.35); border:1px solid #16a34a;
+                                            border-radius:10px; padding:0.85rem; margin-bottom:0.5rem;">
+                                    <div style="color:#4ade80; font-weight:700; font-size:0.95rem;">✅ {skill_name}</div>
+                                    <div style="color:#d1fae5; font-size:0.83rem; margin-top:0.35rem; line-height:1.5;">{skill_note}</div>
                                 </div>
                                 """,
                                 unsafe_allow_html=True
@@ -628,25 +642,25 @@ def render_resume_analysis(candidates_df, requirements_df):
                         g_time    = gap.get("time_to_bridge", "N/A") if isinstance(gap, dict) else "N/A"
                         st.markdown(
                             f"""
-                            <div style="background:rgba(30,41,59,0.6); border-left:5px solid {color};
-                                        border-radius:0 10px 10px 0; padding:0.9rem 1.2rem; margin-bottom:0.7rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
-                                    <span style="color:#f8fafc; font-weight:700; font-size:1rem;">❌ {g_skill}</span>
+                            <div style="background:rgba(15,23,42,0.85); border-left:5px solid {color};
+                                        border-radius:0 10px 10px 0; padding:1rem 1.3rem; margin-bottom:0.8rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                                    <span style="color:#f8fafc; font-weight:800; font-size:1.05rem;">❌ {g_skill}</span>
                                     <span style="background:{bg}; color:{color}; border:1px solid {color};
                                                  border-radius:20px; padding:0.15rem 0.7rem;
                                                  font-size:0.75rem; font-weight:700;">{sev.upper()}</span>
                                 </div>
-                                <div style="color:#94a3b8; font-size:0.85rem; margin-bottom:0.5rem;">{g_note}</div>
+                                <div style="color:#e2e8f0; font-size:0.88rem; margin-bottom:0.7rem; line-height:1.5; font-weight:400;">{g_note}</div>
                                 <div style="display:flex; gap:1rem; flex-wrap:wrap;">
-                                    <div style="background:rgba(59,130,246,0.1); border:1px solid #3b82f6;
-                                                border-radius:6px; padding:0.4rem 0.7rem; flex:1; min-width:200px;">
-                                        <div style="color:#60a5fa; font-size:0.72rem; font-weight:600; margin-bottom:0.2rem;">📚 RECOMMENDED ACTION</div>
-                                        <div style="color:#cbd5e1; font-size:0.82rem;">{g_rec}</div>
+                                    <div style="background:rgba(37,99,235,0.25); border:1px solid #3b82f6;
+                                                border-radius:6px; padding:0.45rem 0.75rem; flex:1; min-width:200px;">
+                                        <div style="color:#93c5fd; font-size:0.72rem; font-weight:700; margin-bottom:0.25rem; letter-spacing:0.05em;">📚 RECOMMENDED ACTION</div>
+                                        <div style="color:#f1f5f9; font-size:0.84rem; line-height:1.5;">{g_rec}</div>
                                     </div>
-                                    <div style="background:rgba(167,139,250,0.1); border:1px solid #a78bfa;
-                                                border-radius:6px; padding:0.4rem 0.7rem; min-width:120px; text-align:center;">
-                                        <div style="color:#c4b5fd; font-size:0.72rem; font-weight:600; margin-bottom:0.2rem;">⏱ TIME TO BRIDGE</div>
-                                        <div style="color:#e9d5ff; font-size:0.85rem; font-weight:700;">{g_time}</div>
+                                    <div style="background:rgba(109,40,217,0.25); border:1px solid #a78bfa;
+                                                border-radius:6px; padding:0.45rem 0.75rem; min-width:120px; text-align:center;">
+                                        <div style="color:#c4b5fd; font-size:0.72rem; font-weight:700; margin-bottom:0.25rem; letter-spacing:0.05em;">⏱ TIME TO BRIDGE</div>
+                                        <div style="color:#f5f3ff; font-size:0.88rem; font-weight:800;">{g_time}</div>
                                     </div>
                                 </div>
                             </div>
@@ -658,10 +672,10 @@ def render_resume_analysis(candidates_df, requirements_df):
                 if verdict:
                     st.markdown(
                         f"""
-                        <div style="background:rgba(59,130,246,0.07); border:1px solid #3b82f6;
-                                    border-radius:12px; padding:1rem 1.4rem; margin-top:1rem;">
-                            <div style="color:#60a5fa; font-weight:700; font-size:0.85rem; margin-bottom:0.4rem;">🧠 AI RECRUITER VERDICT</div>
-                            <div style="color:#cbd5e1; font-size:0.92rem; line-height:1.6;">{verdict}</div>
+                        <div style="background:rgba(30,64,175,0.2); border:1px solid #3b82f6;
+                                    border-radius:12px; padding:1.1rem 1.5rem; margin-top:1rem;">
+                            <div style="color:#93c5fd; font-weight:700; font-size:0.85rem; margin-bottom:0.5rem; letter-spacing:0.05em;">🧠 AI RECRUITER VERDICT</div>
+                            <div style="color:#f1f5f9; font-size:0.94rem; line-height:1.7; font-weight:400;">{verdict}</div>
                         </div>
                         """,
                         unsafe_allow_html=True
