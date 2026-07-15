@@ -13,7 +13,7 @@ def ask_ai(prompt: str, system: str = "") -> str:
             messages=messages,
             options={
                 "temperature": 0.3,
-                "num_predict": 450,  # Limits output length to guarantee generation under 30 seconds
+                "num_predict": 900,  # Limits output length to keep generation under 1 minute
                 "top_k": 40,
                 "top_p": 0.9
             }
