@@ -1574,6 +1574,77 @@ if "employee_db" not in st.session_state:
                 {"date": "2022-11-01", "rating": "Needs Improvement"},
                 {"date": "2023-11-05", "rating": "Meets Expectations"}
             ]
+        },
+        {
+            "Name": "Karthik Rajan", 
+            "Role": "DevOps Engineer", 
+            "Department": "Engineering", 
+            "Tenure": "2.5 Years", 
+            "Performance": "Outstanding",
+            "Performance_History": [
+                {"date": "2022-08-15", "rating": "Meets Expectations"},
+                {"date": "2023-08-20", "rating": "Exceeds Expectations"},
+                {"date": "2024-08-22", "rating": "Outstanding"}
+            ]
+        },
+        {
+            "Name": "Pooja Hegde", 
+            "Role": "Frontend Developer", 
+            "Department": "Engineering", 
+            "Tenure": "1 Year", 
+            "Performance": "Meets Expectations",
+            "Performance_History": [
+                {"date": "2023-10-10", "rating": "Meets Expectations"},
+                {"date": "2024-10-05", "rating": "Meets Expectations"}
+            ]
+        },
+        {
+            "Name": "Vikram Malhotra", 
+            "Role": "Product Manager", 
+            "Department": "Product", 
+            "Tenure": "5 Years", 
+            "Performance": "Outstanding",
+            "Performance_History": [
+                {"date": "2020-05-12", "rating": "Exceeds Expectations"},
+                {"date": "2022-05-15", "rating": "Exceeds Expectations"},
+                {"date": "2024-05-18", "rating": "Outstanding"}
+            ]
+        },
+        {
+            "Name": "Riya Sen", 
+            "Role": "Data Analyst", 
+            "Department": "Analytics", 
+            "Tenure": "3 Years", 
+            "Performance": "Exceeds Expectations",
+            "Performance_History": [
+                {"date": "2021-12-01", "rating": "Meets Expectations"},
+                {"date": "2022-12-05", "rating": "Exceeds Expectations"},
+                {"date": "2023-12-10", "rating": "Exceeds Expectations"}
+            ]
+        },
+        {
+            "Name": "Amit Sharma", 
+            "Role": "QA Automation Engineer", 
+            "Department": "Engineering", 
+            "Tenure": "2 Years", 
+            "Performance": "Meets Expectations",
+            "Performance_History": [
+                {"date": "2022-06-18", "rating": "Needs Improvement"},
+                {"date": "2023-06-20", "rating": "Meets Expectations"},
+                {"date": "2024-06-22", "rating": "Meets Expectations"}
+            ]
+        },
+        {
+            "Name": "Meera Nair", 
+            "Role": "Talent Acquisition Specialist", 
+            "Department": "Human Resources", 
+            "Tenure": "4 Years", 
+            "Performance": "Exceeds Expectations",
+            "Performance_History": [
+                {"date": "2020-11-15", "rating": "Meets Expectations"},
+                {"date": "2022-11-20", "rating": "Exceeds Expectations"},
+                {"date": "2024-11-22", "rating": "Exceeds Expectations"}
+            ]
         }
     ]
     
@@ -2912,6 +2983,8 @@ if candidates_df is not None and requirements_df is not None:
             
         st.markdown("##### Employees List")
         emp_df_display = pd.DataFrame(filtered_employees)
+        if "Performance_History" in emp_df_display.columns:
+            emp_df_display = emp_df_display.drop(columns=["Performance_History"])
         st.dataframe(emp_df_display, use_container_width=True, hide_index=True)
         
         st.markdown("---")
