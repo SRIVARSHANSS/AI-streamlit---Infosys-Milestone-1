@@ -339,8 +339,12 @@ def render_resume_upload(requirements_df):
             match_text = st.session_state["upload_match_result"]
             parsed_gap = None
             try:
-                cleaned = _re.sub(r"```[\w]*\n?", "", gap_raw).strip()
-                parsed_gap = json.loads(cleaned)
+                json_match = _re.search(r"(\{.*\})", gap_raw, _re.DOTALL)
+                if json_match:
+                    parsed_gap = json.loads(json_match.group(1))
+                else:
+                    cleaned = _re.sub(r"```[\w]*\n?", "", gap_raw).strip()
+                    parsed_gap = json.loads(cleaned)
             except Exception:
                 parsed_gap = None
 
@@ -555,9 +559,12 @@ def render_resume_analysis(candidates_df, requirements_df):
             parsed = None
             try:
                 import json, re
-                # Strip markdown fences if model wraps in ```json ... ```
-                cleaned = re.sub(r"```[\w]*\n?", "", raw_json).strip()
-                parsed = json.loads(cleaned)
+                json_match = re.search(r"(\{.*\})", raw_json, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group(1))
+                else:
+                    cleaned = re.sub(r"```[\w]*\n?", "", raw_json).strip()
+                    parsed = json.loads(cleaned)
             except Exception:
                 parsed = None
 
