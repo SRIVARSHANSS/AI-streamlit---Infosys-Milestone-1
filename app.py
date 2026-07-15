@@ -17,6 +17,7 @@ from ai_modules import (
     talent_insight,
     job_discussion_analyzer,
     interview_question_generator,
+    talent_management_summary,
 )
 
 # 1. Must call set_page_config as the first Streamlit command
@@ -1528,10 +1529,52 @@ if "notifications" not in st.session_state:
 
 if "employee_db" not in st.session_state:
     st.session_state["employee_db"] = [
-        {"Name": "Vijay Kumar", "Role": "Senior Software Engineer", "Department": "Engineering", "Tenure": "3 Years", "Performance": "Exceeds Expectations"},
-        {"Name": "Sneha Sharma", "Role": "Data Scientist", "Department": "Analytics", "Tenure": "1.5 Years", "Performance": "Meets Expectations"},
-        {"Name": "Ramesh Patel", "Role": "Lead UX Designer", "Department": "Design", "Tenure": "4 Years", "Performance": "Outstanding"},
-        {"Name": "Anjali Sen", "Role": "HR Specialist", "Department": "Human Resources", "Tenure": "2 Years", "Performance": "Meets Expectations"}
+        {
+            "Name": "Vijay Kumar", 
+            "Role": "Senior Software Engineer", 
+            "Department": "Engineering", 
+            "Tenure": "3 Years", 
+            "Performance": "Exceeds Expectations",
+            "Performance_History": [
+                {"date": "2022-07-10", "rating": "Meets Expectations"},
+                {"date": "2023-07-12", "rating": "Exceeds Expectations"},
+                {"date": "2024-07-15", "rating": "Exceeds Expectations"}
+            ]
+        },
+        {
+            "Name": "Sneha Sharma", 
+            "Role": "Data Scientist", 
+            "Department": "Analytics", 
+            "Tenure": "1.5 Years", 
+            "Performance": "Meets Expectations",
+            "Performance_History": [
+                {"date": "2023-03-20", "rating": "Meets Expectations"},
+                {"date": "2024-03-15", "rating": "Meets Expectations"}
+            ]
+        },
+        {
+            "Name": "Ramesh Patel", 
+            "Role": "Lead UX Designer", 
+            "Department": "Design", 
+            "Tenure": "4 Years", 
+            "Performance": "Outstanding",
+            "Performance_History": [
+                {"date": "2021-09-05", "rating": "Meets Expectations"},
+                {"date": "2022-09-10", "rating": "Exceeds Expectations"},
+                {"date": "2023-09-12", "rating": "Outstanding"}
+            ]
+        },
+        {
+            "Name": "Anjali Sen", 
+            "Role": "HR Specialist", 
+            "Department": "Human Resources", 
+            "Tenure": "2 Years", 
+            "Performance": "Meets Expectations",
+            "Performance_History": [
+                {"date": "2022-11-01", "rating": "Needs Improvement"},
+                {"date": "2023-11-05", "rating": "Meets Expectations"}
+            ]
+        }
     ]
     
 if "chat_history" not in st.session_state:
@@ -2872,6 +2915,61 @@ if candidates_df is not None and requirements_df is not None:
         st.dataframe(emp_df_display, use_container_width=True, hide_index=True)
         
         st.markdown("---")
+        st.markdown("#### Individual Talent Profile")
+        profile_emp_names = [e["Name"] for e in st.session_state["employee_db"]]
+        selected_profile_name = st.selectbox("Select Employee for Talent Profile", profile_emp_names, key="profile_emp_selectbox")
+        
+        emp_data = None
+        for e in st.session_state["employee_db"]:
+            if e["Name"] == selected_profile_name:
+                emp_data = e
+                break
+                
+        if emp_data:
+            st.markdown(
+                f"""
+                <div style="background-color: #1e293b; padding: 1.2rem; border-radius: 8px; border: 1px solid #334155; margin-bottom: 1rem;">
+                    <div style="font-size: 1.15rem; color: #f8fafc; font-weight: 700; margin-bottom: 0.5rem;">{emp_data['Name']}</div>
+                    <div style="color: #cbd5e1; font-size: 0.95rem; line-height: 1.6;">
+                        💼 <strong>Role:</strong> {emp_data['Role']}<br>
+                        🏢 <strong>Department:</strong> {emp_data['Department']}<br>
+                        📅 <strong>Tenure:</strong> {emp_data['Tenure']}<br>
+                        🎯 <strong>Current Performance Appraisal Score:</strong> {emp_data['Performance']}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            st.markdown("##### 📈 Performance Rating History")
+            history_list = emp_data.get("Performance_History", [])
+            sorted_history = history_list[::-1]
+            history_df = pd.DataFrame(sorted_history)
+            if not history_df.empty:
+                history_df.columns = ["Date", "Rating"]
+                st.dataframe(history_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No performance history recorded.")
+                
+            if st.button("Generate AI Talent Summary", key=f"talent_ai_{selected_profile_name}", use_container_width=True, type="primary"):
+                with st.spinner("Analyzing performance history..."):
+                    summary_result = talent_management_summary(
+                        name=emp_data["Name"],
+                        role=emp_data["Role"],
+                        department=emp_data["Department"],
+                        tenure=emp_data["Tenure"],
+                        performance_history=history_list
+                    )
+                st.session_state[f"ai_talent_summary_{selected_profile_name}"] = summary_result
+                
+            if f"ai_talent_summary_{selected_profile_name}" in st.session_state:
+                ai_text = st.session_state[f"ai_talent_summary_{selected_profile_name}"]
+                if "AI service unavailable" in ai_text:
+                    st.warning(ai_text)
+                else:
+                    st.markdown(ai_text)
+        
+        st.markdown("---")
         # Promotion Simulator
         st.markdown("##### Internal Transfer / Promotion Simulator")
         with st.form("promote_employee_form"):
@@ -2887,6 +2985,12 @@ if candidates_df is not None and requirements_df is not None:
                         if new_title.strip():
                             emp["Role"] = new_title.strip()
                         emp["Performance"] = new_performance
+                        if "Performance_History" not in emp:
+                            emp["Performance_History"] = []
+                        emp["Performance_History"].append({
+                            "date": datetime.date.today().isoformat(),
+                            "rating": new_performance
+                        })
                         break
                 st.success(f"Successfully updated internal profile for **{selected_emp}**!")
                 safe_rerun()

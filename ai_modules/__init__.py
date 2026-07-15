@@ -9,3 +9,5 @@ from .recruitment_analysis import recruitment_analysis
 from .talent_insight import talent_insight
 from .job_discussion_analyzer import job_discussion_analyzer
 from .interview_question_generator import interview_question_generator
+from .talent_management import talent_management_summary
+
