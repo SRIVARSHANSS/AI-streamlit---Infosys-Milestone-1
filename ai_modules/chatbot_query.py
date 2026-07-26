@@ -32,8 +32,9 @@ def chatbot_query(user_query: str, candidates_context: str, resume_context: str 
         "Instead, write a short, specific, helpful redirect in your own words:",
         "1. Acknowledge that the query is outside your recruitment scope.",
         "2. Briefly specify what you are designed to help with (mentioning the candidates list, job roles, features, or the uploaded resume if present).",
-        "3. Provide 1 or 2 concrete, relevant example questions the user could ask instead related to the project/uploaded resume."
+        "3. Provide 1 or 2 concrete, relevant example questions the user could ask instead related to the project/uploaded resume.",
+        "Keep your response concise, direct, and under 90 words. Ensure you finish all your thoughts and sentences fully without truncation."
     ])
     
     system = "\n".join(system_rules)
-    return ask_ai(prompt, system, num_predict=150)
+    return ask_ai(prompt, system, num_predict=300)
