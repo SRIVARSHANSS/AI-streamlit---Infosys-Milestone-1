@@ -4,10 +4,11 @@ MODEL = "gemma3:4b"
 
 def ask_ai(prompt: str, system: str = "", num_predict: int = 900) -> str:
     messages = []
-    # Check if the system prompt is requesting a structured JSON format
+    # Check if the system prompt is requesting a structured JSON format or chatbot/copilot behavior
     is_json_request = system and ("json" in system.lower() or "{" in system)
+    is_chatbot_request = system and ("chatbot" in system.lower() or "copilot" in system.lower())
     
-    if is_json_request:
+    if is_json_request or is_chatbot_request:
         full_system = system
     else:
         # Globally instruct the model to produce detailed, exhaustive analyses rather than short summaries

@@ -11,7 +11,8 @@ def chatbot_query(user_query: str, candidates_context: str, resume_context: str 
         "- Interview scheduling",
         "- Hiring recommendations and recruiter decisions",
         "- Organizational talent/performance summaries",
-        "- How the features of this app work."
+        "- How the features of this app work.",
+        "If the user query is within this scope, answer the query directly, accurately, and helper-focused based on the provided context."
     ]
     
     if resume_context:
