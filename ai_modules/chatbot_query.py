@@ -36,4 +36,4 @@ def chatbot_query(user_query: str, candidates_context: str, resume_context: str 
     ])
     
     system = "\n".join(system_rules)
-    return ask_ai(prompt, system)
+    return ask_ai(prompt, system, num_predict=150)

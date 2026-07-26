@@ -2,7 +2,7 @@ import ollama
 
 MODEL = "gemma3:4b"
 
-def ask_ai(prompt: str, system: str = "") -> str:
+def ask_ai(prompt: str, system: str = "", num_predict: int = 900) -> str:
     messages = []
     # Check if the system prompt is requesting a structured JSON format
     is_json_request = system and ("json" in system.lower() or "{" in system)
@@ -25,7 +25,7 @@ def ask_ai(prompt: str, system: str = "") -> str:
             messages=messages,
             options={
                 "temperature": 0.3,
-                "num_predict": 900,  # Limits output length to keep generation under 1 minute
+                "num_predict": num_predict,  # Use dynamically set prediction limit
                 "top_k": 40,
                 "top_p": 0.9
             }
