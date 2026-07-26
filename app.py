@@ -3077,21 +3077,27 @@ if candidates_df is not None and requirements_df is not None:
 
     # ------------------ MODULE 9: AI CHATBOT ASSISTANT ------------------
     elif navigation_option == "AI Chatbot Assistant":
-        st.markdown("### 🤖 AI Talent Copilot Assistant")
-        st.write("Ask your AI assistant questions regarding candidates, match scores, experience levels, or upload a document to discuss.")
-
         # Initialize session state variables if not present
+        if "resume_text" not in st.session_state:
+            st.session_state["resume_text"] = None
+        if "resume_filename" not in st.session_state:
+            st.session_state["resume_filename"] = None
         if "chatbot_uploaded_text" not in st.session_state:
             st.session_state["chatbot_uploaded_text"] = None
         if "chatbot_uploaded_filename" not in st.session_state:
             st.session_state["chatbot_uploaded_filename"] = None
+
+        st.markdown("### 🤖 AI Talent Copilot Assistant")
+        st.write("Ask your AI assistant questions regarding candidates, match scores, experience levels, or upload a resume to discuss candidate fit.")
+
+        user_query = None
 
         col_chat, col_context = st.columns([5, 3])
 
         with col_context:
             st.markdown("#### 📁 Chat Context & File Upload")
             
-            # File Uploader
+            # File Uploader for general document context
             uploaded_file = st.file_uploader(
                 "Upload context file (PDF, TXT, DOCX)", 
                 type=["pdf", "txt", "docx"], 
@@ -3134,7 +3140,7 @@ if candidates_df is not None and requirements_df is not None:
                     st.success(f"Successfully processed **{uploaded_file.name}**!")
                     safe_rerun()
             
-            # Show active file status
+            # Show active general file status
             if st.session_state["chatbot_uploaded_filename"]:
                 st.markdown(
                     f"""
@@ -3153,7 +3159,7 @@ if candidates_df is not None and requirements_df is not None:
                     with st.expander("🔍 Preview Extracted Text", expanded=False):
                         st.text(st.session_state["chatbot_uploaded_text"][:800] + "...")
                         
-                if st.button("❌ Remove File Context", use_container_width=True, type="secondary"):
+                if st.button("❌ Remove File Context", use_container_width=True, type="secondary", key="remove_general_context_btn_unique"):
                     st.session_state["chatbot_uploaded_text"] = None
                     st.session_state["chatbot_uploaded_filename"] = None
                     # Also clear uploader state in session state if key exists
@@ -3161,12 +3167,83 @@ if candidates_df is not None and requirements_df is not None:
                         del st.session_state["chatbot_file_uploader"]
                     st.success("File context cleared.")
                     safe_rerun()
-            else:
-                st.info("No file uploaded. The chatbot will query the active candidate database by default. Upload a resume, JD, or notes to chat about them!")
+
+            st.markdown("---")
+
+            # Uploader for specific candidate resume
+            uploaded_resume = st.file_uploader(
+                "Upload Candidate Resume (PDF, DOCX, TXT)",
+                type=["pdf", "docx", "txt"],
+                key="chatbot_resume_file_uploader"
+            )
+            
+            if uploaded_resume is not None:
+                # Process the resume if it's new
+                if st.session_state["resume_filename"] != uploaded_resume.name:
+                    file_ext = uploaded_resume.name.lower().split(".")[-1]
+                    raw_bytes = uploaded_resume.read()
+                    extracted_text = ""
+                    
+                    try:
+                        if file_ext == "txt":
+                            extracted_text = raw_bytes.decode("utf-8", errors="ignore")
+                        elif file_ext == "pdf":
+                            import io
+                            try:
+                                import pypdf
+                                reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+                                extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                            except ImportError:
+                                try:
+                                    import PyPDF2
+                                    reader = PyPDF2.PdfReader(io.BytesIO(raw_bytes))
+                                    extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                                except ImportError:
+                                    extracted_text = f"[PDF libraries missing. Could not extract {uploaded_resume.name}]"
+                        elif file_ext == "docx":
+                            import io
+                            import docx
+                            doc = docx.Document(io.BytesIO(raw_bytes))
+                            extracted_text = "\n".join(p.text for p in doc.paragraphs)
+                    except Exception as e:
+                        extracted_text = f"[Error reading file: {e}]"
+                        
+                    st.session_state["resume_text"] = extracted_text
+                    st.session_state["resume_filename"] = uploaded_resume.name
+                    st.success(f"Successfully processed resume: **{uploaded_resume.name}**!")
+                    safe_rerun()
+            
+            # Show active resume file status
+            if st.session_state["resume_filename"]:
+                st.markdown(
+                    f"""
+                    <div style="background-color:rgba(59,130,246,0.15); border:1px solid #3b82f6; 
+                                padding:1rem; border-radius:8px; margin-bottom:1rem;">
+                        <span style="color:#3b82f6; font-weight:700;">🟢 ACTIVE RESUME CONTEXT</span><br>
+                        <span style="color:#f1f5f9; font-size:0.9rem;"><strong>File:</strong> {st.session_state['resume_filename']}</span><br>
+                        <span style="color:#cbd5e1; font-size:0.8rem;"><strong>Size:</strong> {len(st.session_state['resume_text'] or '')} characters extracted</span>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                
+                # Preset query helper for resume
+                if st.button("🔍 Ask About Resume", key="ask_about_resume_btn_unique", use_container_width=True):
+                    user_query = "Please analyze this uploaded resume, summarize its core skills and experience, and assess its suitability for the current active job roles."
+                
+                # Remove Resume Context
+                if st.button("❌ Remove Resume Context", key="remove_resume_context_btn_unique", use_container_width=True, type="secondary"):
+                    st.session_state["resume_text"] = None
+                    st.session_state["resume_filename"] = None
+                    # Also clear uploader state in session state if key exists
+                    if "chatbot_resume_file_uploader" in st.session_state:
+                        del st.session_state["chatbot_resume_file_uploader"]
+                    st.success("Resume context cleared.")
+                    safe_rerun()
 
             st.markdown("---")
             # Clear chat button
-            if st.button("🗑️ Clear Chat History", use_container_width=True):
+            if st.button("🗑️ Clear Chat History", use_container_width=True, key="clear_chat_history_btn_unique"):
                 st.session_state["chat_history"] = [
                     {"role": "assistant", "content": "Hello! I am your AI Talent Assistant. Ask me questions about candidates, matching criteria, or recruitment metrics."}
                 ]
@@ -3196,7 +3273,6 @@ if candidates_df is not None and requirements_df is not None:
             chat_input_val = st.chat_input("Ask your query here...")
 
             # Chat Logic triggered
-            user_query = None
             if q1_clicked:
                 user_query = "Who is top matched Software Engineer?"
             elif q2_clicked:
@@ -3225,10 +3301,17 @@ if candidates_df is not None and requirements_df is not None:
                     context_to_send = candidates_context
 
                 with st.spinner("AI is thinking..."):
-                    response = chatbot_query(user_query=user_query, candidates_context=context_to_send)
-                        
-                st.session_state["chat_history"].append({"role": "assistant", "content": response})
-                safe_rerun()
+                    response = chatbot_query(
+                        user_query=user_query, 
+                        candidates_context=context_to_send,
+                        resume_context=st.session_state["resume_text"]
+                    )
+                
+                if "AI service unavailable" in response:
+                    st.warning(response)
+                else:
+                    st.session_state["chat_history"].append({"role": "assistant", "content": response})
+                    safe_rerun()
 
     # ------------------ MODULE 10: SYSTEM SETTINGS ------------------
     elif navigation_option == "System Settings":
