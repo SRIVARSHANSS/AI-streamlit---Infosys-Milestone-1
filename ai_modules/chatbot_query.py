@@ -12,7 +12,7 @@ def chatbot_query(user_query: str, candidates_context: str, resume_context: str 
         "- Hiring recommendations and recruiter decisions",
         "- Organizational talent/performance summaries",
         "- How the features of this app work.",
-        "If the user query is within this scope, answer the query directly, accurately, and helper-focused based on the provided context."
+        "If the user query is within this scope, you must answer the query directly, accurately, and thoroughly with meaningful, recruiter-grade analysis based on the provided candidate and resume contexts. Provide clear justifications for your recommendations."
     ]
     
     if resume_context:
@@ -34,8 +34,8 @@ def chatbot_query(user_query: str, candidates_context: str, resume_context: str 
         "1. Acknowledge that the query is outside your recruitment scope.",
         "2. Briefly specify what you are designed to help with (mentioning the candidates list, job roles, features, or the uploaded resume if present).",
         "3. Provide 1 or 2 concrete, relevant example questions the user could ask instead related to the project/uploaded resume.",
-        "Keep your response concise, direct, and under 90 words. Ensure you finish all your thoughts and sentences fully without truncation."
+        "Ensure all responses are fully complete without truncation. Keep in-scope answers thorough and analytical, and keep out-of-scope redirects brief."
     ])
     
     system = "\n".join(system_rules)
-    return ask_ai(prompt, system, num_predict=300)
+    return ask_ai(prompt, system, num_predict=450)
