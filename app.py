@@ -470,8 +470,276 @@ def render_resume_upload(requirements_df):
                 </div>""",
                 unsafe_allow_html=True
             )
+def render_resume_matching_page(candidates_df, requirements_df):
+    st.markdown("### 📊 Resume Matching & Upload Portal")
+    st.markdown("Upload a new candidate resume to match against target positions, or view details of existing candidates.")
+    
+    # 1. Show uploader
+    render_resume_upload(requirements_df)
+    
+    # 2. Show analysis score index if candidates exist
+    cand_names = sorted(candidates_df["Name"].tolist())
+    if cand_names:
+        st.markdown("---")
+        st.markdown("#### 🎯 Overall Match Score Index")
+        
+        default_idx = 0
+        if "last_analyzed_candidate" in st.session_state:
+            lac = st.session_state["last_analyzed_candidate"]
+            if lac in cand_names:
+                default_idx = cand_names.index(lac)
+                
+        selected_name = st.selectbox("Select Candidate to View Score", cand_names, index=default_idx, key="matching_cand_select")
+        
+        cand_data = candidates_df[candidates_df["Name"] == selected_name].iloc[0]
+        role_applied = cand_data["Role Applied"]
+        c_skills = [s.strip().lower() for s in cand_data["Skills"].split(",")]
+        
+        job_spec = requirements_df[requirements_df["Role"] == role_applied]
+        if not job_spec.empty:
+            req_skills = [s.strip().lower() for s in job_spec.iloc[0]["Required_Skills"].split(",")]
+            min_exp = int(job_spec.iloc[0]["Min_Experience"])
+        else:
+            req_skills = []
+            min_exp = 0
+            
+        matched = [s for s in req_skills if s in c_skills]
+        missing = [s for s in req_skills if s not in c_skills]
+        match_score = int((len(matched) / max(1, len(req_skills))) * 100)
+        
+        col_an_1, col_an_2 = st.columns([2, 1])
+        with col_an_1:
+            st.markdown(
+                f"""
+                <div class="explainability-card" style="margin-top: 0;">
+                    <h4 style="margin:0; color:#f8fafc;">Resume Score Summary: {selected_name}</h4>
+                    <p style="color:#94a3b8; margin:0.2rem 0 1rem 0;">Evaluated against: <strong>{role_applied}</strong></p>
+                    <div style="font-size:1.1rem; line-height: 1.6; color:#cbd5e1;">
+                        ✔️ <strong>Matched Skills:</strong> <span style="color:#34d399;">{', '.join(matched) if matched else 'None'}</span><br>
+                        ❌ <strong>Skill Gaps:</strong> <span style="color:#f87171;">{', '.join(missing) if missing else 'None'}</span><br>
+                        📅 <strong>Experience Validation:</strong> Candidate has {cand_data['Experience_Years']} years (Job Requirement: {min_exp} years).
+                    </div>
+                </div>
+                """, unsafe_allow_html=True
+            )
+            
+            # Show cached AI match summary if exists
+            cache = st.session_state.get("ai_analysis_cache", {}).get(selected_name, {})
+            if cache and "match_summary" in cache:
+                st.markdown("##### 🤖 AI Resume Match Summary")
+                st.info(cache["match_summary"])
+            else:
+                st.info("Run 'AI Skill Gap Analysis' on this candidate in the 'Skill Gap Analyser' page to generate an AI match summary report.")
+                
+        with col_an_2:
+            fig = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = match_score,
+                domain = {'x': [0, 1], 'y': [0, 1]},
+                title = {'text': "Resume Quality Index", 'font': {'color': "#f8fafc", 'size': 14}},
+                gauge = {
+                    'axis': {'range': [0, 100], 'tickcolor': "#cbd5e1"},
+                    'bar': {'color': "#3b82f6"},
+                    'steps': [
+                        {'range': [0, 50], 'color': "rgba(220, 38, 38, 0.2)"},
+                        {'range': [50, 75], 'color': "rgba(245, 158, 11, 0.2)"},
+                        {'range': [75, 100], 'color': "rgba(16, 185, 129, 0.2)"}
+                    ],
+                    'threshold': {
+                        'line': {'color': "red", 'width': 4},
+                        'thickness': 0.75,
+                        'value': 75
+                    }
+                }
+            ))
+            fig = apply_custom_plotly_layout(fig)
+            st.plotly_chart(fig, use_container_width=True)
 
+def render_resume_chat_page(candidates_df, requirements_df):
+    st.markdown("### 💬 Resume Chat / Q&A Portal")
+    st.markdown("Have a direct conversation with the candidate's resume content to inquire about specific skills, team lead capabilities, or project experience.")
+    
+    cand_names = sorted(candidates_df["Name"].tolist())
+    if not cand_names:
+        st.warning("No candidates available for chat.")
+        return
+        
+    default_idx = 0
+    if "last_analyzed_candidate" in st.session_state:
+        lac = st.session_state["last_analyzed_candidate"]
+        if lac in cand_names:
+            default_idx = cand_names.index(lac)
+            
+    selected_name = st.selectbox("Select Candidate to Chat With", cand_names, index=default_idx, key="chat_cand_select")
+    
+    cand_data = candidates_df[candidates_df["Name"] == selected_name].iloc[0]
+    role_applied = cand_data["Role Applied"]
+    
+    if "resume_chat_history" not in st.session_state:
+        st.session_state["resume_chat_history"] = {}
+    if selected_name not in st.session_state["resume_chat_history"]:
+        st.session_state["resume_chat_history"][selected_name] = []
+        
+    chat_history = st.session_state["resume_chat_history"][selected_name]
+    
+    # Message bubbles
+    for msg in chat_history:
+        bubble_class = "chat-bubble-user" if msg["role"] == "user" else "chat-bubble-assistant"
+        st.markdown(f'<div class="{bubble_class}">{msg["content"]}</div>', unsafe_allow_html=True)
+        
+    chat_col1, chat_col2 = st.columns([4, 1])
+    with chat_col1:
+        question_input = st.text_input(
+            "Ask a question about this candidate...",
+            key=f"q_input_{selected_name}",
+            placeholder="e.g. Does this candidate have experience leading teams?"
+        )
+    with chat_col2:
+        ask_clicked = st.button("Ask", key=f"ask_btn_{selected_name}", use_container_width=True)
+        
+    if ask_clicked and question_input.strip():
+        chat_history.append({"role": "user", "content": question_input.strip()})
+        resume_text_summary = f"Candidate Name: {selected_name}. Role Applied: {role_applied}. Skills: {cand_data['Skills']}. Experience: {cand_data['Experience_Years']} years."
+        with st.spinner("Asking AI..."):
+            ans = resume_chat(candidate_context=resume_text_summary, question=question_input.strip())
+        chat_history.append({"role": "assistant", "content": ans})
+        safe_rerun()
 
+def render_skill_gap_page(candidates_df, requirements_df):
+    st.markdown("### 📊 Skill Gap Analyser")
+    st.markdown("Run deep AI analysis on candidates' skill gaps against target position requirements to review readiness and recommended training pathways.")
+    
+    cand_names = sorted(candidates_df["Name"].tolist())
+    if not cand_names:
+        st.warning("No candidates available for analysis.")
+        return
+        
+    default_idx = 0
+    if "last_analyzed_candidate" in st.session_state:
+        lac = st.session_state["last_analyzed_candidate"]
+        if lac in cand_names:
+            default_idx = cand_names.index(lac)
+            
+    selected_name = st.selectbox("Select Candidate to Analyze", cand_names, index=default_idx, key="gap_cand_select")
+    
+    cand_data = candidates_df[candidates_df["Name"] == selected_name].iloc[0]
+    role_applied = cand_data["Role Applied"]
+    c_skills = [s.strip().lower() for s in cand_data["Skills"].split(",")]
+    
+    job_spec = requirements_df[requirements_df["Role"] == role_applied]
+    if not job_spec.empty:
+        req_skills = [s.strip().lower() for s in job_spec.iloc[0]["Required_Skills"].split(",")]
+        min_exp = int(job_spec.iloc[0]["Min_Experience"])
+    else:
+        req_skills = []
+        min_exp = 0
+        
+    st.markdown("#### 🤖 Core Resume Recommendations")
+    missing = [s for s in req_skills if s not in c_skills]
+    if not missing:
+        st.success("Excellent! The candidate matches all required skills for this position.")
+    else:
+        st.info(f"Recommended Upskilling: Suggest candidate completes certifications or projects in: **{', '.join(missing).upper()}**.")
+        
+    # Check cache
+    if "ai_analysis_cache" not in st.session_state:
+        st.session_state["ai_analysis_cache"] = {}
+    cache = st.session_state["ai_analysis_cache"].get(selected_name, {})
+    
+    if st.button("🤖 Run AI Skill Gap Analysis", key=f"run_ai_{selected_name}", use_container_width=True, type="primary"):
+        with st.spinner("Running deep AI analysis — this may take 10-20 seconds..."):
+            gap_res = skill_gap_analyser(
+                candidate_skills=c_skills,
+                required_skills=req_skills,
+                experience_years=cand_data['Experience_Years'],
+                min_experience=min_exp
+            )
+            resume_text_summary = f"Candidate Name: {selected_name}. Role Applied: {role_applied}. Skills: {cand_data['Skills']}. Experience: {cand_data['Experience_Years']} years."
+            job_desc_summary = f"Required Skills: {', '.join(req_skills)}. Minimum Experience: {min_exp} years."
+            match_res = resume_matching(resume_text=resume_text_summary, job_description=job_desc_summary)
+            
+            cache = {
+                "skill_gap": gap_res,
+                "match_summary": match_res
+            }
+            st.session_state["ai_analysis_cache"][selected_name] = cache
+            safe_rerun()
+            
+    if cache and "skill_gap" in cache:
+        skill_gap_json = cache["skill_gap"]
+        
+        # 1. Readiness Banner
+        readiness = skill_gap_json.get("Hire_Readiness", "Unknown").upper()
+        exp_note = skill_gap_json.get("Experience_Fit_Reasoning", "N/A")
+        
+        st.markdown(
+            f"""
+            <div style="background: linear-gradient(135deg, #1e293b 0%, #064e3b 100%); padding: 1.5rem; border-radius: 10px; border: 1px solid #059669; margin-bottom: 1.5rem;">
+                <h4 style="margin: 0 0 0.5rem 0; color: #34d399;">Hire Readiness Classification: {readiness}</h4>
+                <p style="margin: 0; font-size: 0.95rem; color: #cbd5e1;"><strong>Experience Validation:</strong> {exp_note}</p>
+            </div>
+            """, unsafe_allow_html=True
+        )
+        
+        # 2. Key Strengths cards
+        st.markdown("#### Key Strengths")
+        strengths = skill_gap_json.get("Key_Strengths", [])
+        if strengths:
+            str_cols = st.columns(len(strengths))
+            for i, strength in enumerate(strengths):
+                with str_cols[i]:
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155; text-align: center; height: 110px;">
+                            <span style="font-size: 1.5rem;">⭐</span>
+                            <div style="font-weight: 600; color: #f8fafc; margin-top: 0.25rem; font-size: 0.9rem;">{strength}</div>
+                        </div>
+                        """, unsafe_allow_html=True
+                    )
+        else:
+            st.write("No strengths highlighted.")
+            
+        st.write("")
+        
+        # 3. Gaps & Roadmap
+        st.markdown("#### Skill Gaps & Upskilling Roadmap")
+        gaps_list = skill_gap_json.get("Skill_Gaps_Found", [])
+        courses = skill_gap_json.get("Recommended_Courses_Certifications", [])
+        
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            st.markdown(
+                f"""
+                <div class="explainability-card" style="border-left-color: #f87171;">
+                    <h5 style="margin:0 0 0.8rem 0; color: #f8fafc;">Identified Missing Skills</h5>
+                    <ul style="margin:0; padding-left: 1.2rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.6;">
+                        {"".join(f"<li>{g}</li>" for g in gaps_list) if gaps_list else "<li>No missing skills found!</li>"}
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True
+            )
+        with col_g2:
+            st.markdown(
+                f"""
+                <div class="explainability-card" style="border-left-color: #a78bfa;">
+                    <h5 style="margin:0 0 0.8rem 0; color: #f8fafc;">Upskilling Certifications</h5>
+                    <ul style="margin:0; padding-left: 1.2rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.6;">
+                        {"".join(f"<li>{c}</li>" for c in courses) if courses else "<li>No certifications recommended.</li>"}
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True
+            )
+            
+        # 4. Verdict
+        verdict = skill_gap_json.get("Final_Recruiter_Verdict", "")
+        st.markdown(
+            f"""
+            <div class="explainability-card">
+                <div class="explainability-header">Final Recruiter Verdict</div>
+                <div style="font-size: 1rem; line-height: 1.6; color: #cbd5e1;">{verdict}</div>
+            </div>
+            """, unsafe_allow_html=True
+        )
 
 def render_job_description_generator():
     st.markdown("### ✍️ AI Job Description Generator")
