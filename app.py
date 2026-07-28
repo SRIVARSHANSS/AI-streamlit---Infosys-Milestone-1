@@ -278,7 +278,7 @@ def render_resume_upload(requirements_df):
                     "Read": False
                 })
                 st.success(f"Candidate **{c_name}** added to pool!")
-                st.session_state["nav_option"] = "Resume Analysis Report"
+                st.session_state["nav_option"] = "Resume Matching"
                 st.session_state["last_analyzed_candidate"] = c_name.strip()
                 safe_rerun()
 
@@ -325,6 +325,14 @@ def render_resume_upload(requirements_df):
                     st.session_state["upload_gap_result"]   = gap_result
                     st.session_state["upload_analysis_name"] = c_name
                     st.session_state["upload_analysis_role"] = c_role
+                    
+                    if "ai_analysis_cache" not in st.session_state:
+                        st.session_state["ai_analysis_cache"] = {}
+                    st.session_state["ai_analysis_cache"][c_name] = {
+                        "skill_gap": gap_result,
+                        "match_summary": match_result
+                    }
+                    st.session_state["last_analyzed_candidate"] = c_name
 
         # ---- Show Analysis Results ----
         if "upload_match_result" in st.session_state and "upload_gap_result" in st.session_state:
@@ -529,7 +537,27 @@ def render_resume_matching_page(candidates_df, requirements_df):
                 st.markdown("##### 🤖 AI Resume Match Summary")
                 st.info(cache["match_summary"])
             else:
-                st.info("Run 'AI Skill Gap Analysis' on this candidate in the 'Skill Gap Analyser' page to generate an AI match summary report.")
+                st.info("No AI analysis report cached for this candidate yet. Click below to generate it instantly.")
+                if st.button("🤖 Run AI Fit Analysis", key=f"run_matching_ai_{selected_name}", use_container_width=True, type="primary"):
+                    with st.spinner("Running AI analysis..."):
+                        resume_text_summary = f"Candidate Name: {selected_name}. Role Applied: {role_applied}. Skills: {cand_data['Skills']}. Experience: {cand_data['Experience_Years']} years."
+                        job_desc_summary = f"Required Skills: {', '.join(req_skills)}. Minimum Experience: {min_exp} years."
+                        
+                        match_res = resume_matching(resume_text=resume_text_summary, job_description=job_desc_summary)
+                        gap_res = skill_gap_analyser(
+                            candidate_skills=c_skills,
+                            required_skills=req_skills,
+                            experience_years=cand_data['Experience_Years'],
+                            min_experience=min_exp
+                        )
+                        
+                        if "ai_analysis_cache" not in st.session_state:
+                            st.session_state["ai_analysis_cache"] = {}
+                        st.session_state["ai_analysis_cache"][selected_name] = {
+                            "skill_gap": gap_res,
+                            "match_summary": match_res
+                        }
+                        safe_rerun()
                 
         with col_an_2:
             fig = go.Figure(go.Indicator(
@@ -666,80 +694,139 @@ def render_skill_gap_page(candidates_df, requirements_df):
             safe_rerun()
             
     if cache and "skill_gap" in cache:
-        skill_gap_json = cache["skill_gap"]
-        
-        # 1. Readiness Banner
-        readiness = skill_gap_json.get("Hire_Readiness", "Unknown").upper()
-        exp_note = skill_gap_json.get("Experience_Fit_Reasoning", "N/A")
-        
-        st.markdown(
-            f"""
-            <div style="background: linear-gradient(135deg, #1e293b 0%, #064e3b 100%); padding: 1.5rem; border-radius: 10px; border: 1px solid #059669; margin-bottom: 1.5rem;">
-                <h4 style="margin: 0 0 0.5rem 0; color: #34d399;">Hire Readiness Classification: {readiness}</h4>
-                <p style="margin: 0; font-size: 0.95rem; color: #cbd5e1;"><strong>Experience Validation:</strong> {exp_note}</p>
-            </div>
-            """, unsafe_allow_html=True
-        )
-        
-        # 2. Key Strengths cards
-        st.markdown("#### Key Strengths")
-        strengths = skill_gap_json.get("Key_Strengths", [])
-        if strengths:
-            str_cols = st.columns(len(strengths))
-            for i, strength in enumerate(strengths):
-                with str_cols[i]:
+        raw_json = cache["skill_gap"]
+        parsed = None
+        try:
+            import json, re
+            json_match = re.search(r"(\{.*\})", raw_json, re.DOTALL)
+            if json_match:
+                parsed = json.loads(json_match.group(1))
+            else:
+                cleaned = re.sub(r"```[\w]*\n?", "", raw_json).strip()
+                parsed = json.loads(cleaned)
+        except Exception:
+            parsed = None
+
+        if parsed:
+            # 1. Readiness Banner
+            score = parsed.get("hire_readiness_score", 0)
+            label = parsed.get("hire_readiness_label", "Unknown")
+            exp_note = parsed.get("experience_assessment", "")
+            verdict = parsed.get("overall_recommendation", "")
+            
+            score_color = (
+                "#34d399" if score >= 75 else
+                "#f59e0b" if score >= 50 else
+                "#f87171"
+            )
+            st.markdown(
+                f"""
+                <div style="background: linear-gradient(135deg, rgba(15,23,42,0.98), rgba(30,41,59,0.98));
+                            border: 2px solid {score_color}; border-radius: 14px;
+                            padding: 1.2rem 1.6rem; margin-bottom: 1.5rem; display: flex;
+                            justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:0.2rem; letter-spacing:0.08em;">AI HIRE READINESS</div>
+                        <div style="font-size:1.6rem; font-weight:800; color:{score_color};">{label}</div>
+                        <div style="font-size:0.92rem; color:#f1f5f9; margin-top:0.3rem; font-weight:500;">{exp_note}</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:3rem; font-weight:900; color:{score_color};">{score}</div>
+                        <div style="font-size:0.75rem; color:#cbd5e1; letter-spacing:0.06em;">/ 100 READINESS SCORE</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            # 2. Key Strengths cards
+            strengths_raw = parsed.get("key_strengths", [])
+            strengths = [
+                item if isinstance(item, dict) else {"skill": str(item), "note": ""}
+                for item in strengths_raw
+            ]
+            if strengths:
+                st.markdown("#### Key Strengths")
+                cols_str = st.columns(min(len(strengths), 3))
+                for i, item in enumerate(strengths):
+                    with cols_str[i % 3]:
+                        skill_name = item.get("skill", str(item))
+                        skill_note = item.get("note", "")
+                        st.markdown(
+                            f"""
+                            <div style="background:rgba(20,83,45,0.35); border:1px solid #16a34a;
+                                        border-radius:10px; padding:0.85rem; margin-bottom:0.5rem; height:120px;">
+                                <div style="color:#f8fafc; font-weight:700; font-size:0.95rem;">✅ {skill_name}</div>
+                                <div style="color:#cbd5e1; font-size:0.83rem; margin-top:0.35rem; line-height:1.5;">{skill_note}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+            
+            # 3. Gaps & Roadmap
+            st.markdown("#### Skill Gaps & Upskilling Roadmap")
+            growth_raw = parsed.get("growth_areas", [])
+            growth_areas = [
+                item if isinstance(item, dict)
+                else {"skill": str(item), "severity": "Medium", "gap_note": "", "recommendation": "", "time_to_bridge": "N/A"}
+                for item in growth_raw
+            ]
+            if growth_areas:
+                severity_colors = {
+                    "Critical": ("#f87171", "#7f1d1d"),
+                    "High":     ("#fb923c", "#7c2d12"),
+                    "Medium":   ("#f59e0b", "#78350f"),
+                    "Low":      ("#a78bfa", "#3b0764"),
+                }
+                for gap in growth_areas:
+                    sev = gap.get("severity", "Medium") if isinstance(gap, dict) else "Medium"
+                    color, bg = severity_colors.get(sev, ("#94a3b8", "#1e293b"))
+                    g_skill   = gap.get("skill", "") if isinstance(gap, dict) else str(gap)
+                    g_note    = gap.get("gap_note", "") if isinstance(gap, dict) else ""
+                    g_rec     = gap.get("recommendation", "") if isinstance(gap, dict) else ""
+                    g_time    = gap.get("time_to_bridge", "N/A") if isinstance(gap, dict) else "N/A"
                     st.markdown(
                         f"""
-                        <div style="background-color: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155; text-align: center; height: 110px;">
-                            <span style="font-size: 1.5rem;">⭐</span>
-                            <div style="font-weight: 600; color: #f8fafc; margin-top: 0.25rem; font-size: 0.9rem;">{strength}</div>
+                        <div style="background:rgba(15,23,42,0.85); border-left:5px solid {color};
+                                    border-radius:0 10px 10px 0; padding:1rem 1.3rem; margin-bottom:0.8rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                                <span style="color:#f8fafc; font-weight:800; font-size:1.05rem;">❌ {g_skill}</span>
+                                <span style="background:{bg}; color:{color}; border:1px solid {color};
+                                             border-radius:20px; padding:0.15rem 0.7rem;
+                                             font-size:0.75rem; font-weight:700;">{sev.upper()}</span>
+                            </div>
+                            <div style="color:#cbd5e1; font-size:0.88rem; margin-bottom:0.7rem; line-height:1.5; font-weight:400;">{g_note}</div>
+                            <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                                <div style="background:rgba(37,99,235,0.25); border:1px solid #3b82f6;
+                                            border-radius:6px; padding:0.45rem 0.75rem; flex:1; min-width:200px;">
+                                    <div style="color:#93c5fd; font-size:0.72rem; font-weight:700; margin-bottom:0.25rem; letter-spacing:0.05em;">📚 RECOMMENDED ACTION</div>
+                                    <div style="color:#f1f5f9; font-size:0.84rem; line-height:1.5;">{g_rec}</div>
+                                </div>
+                                <div style="background:rgba(109,40,217,0.25); border:1px solid #a78bfa;
+                                            border-radius:6px; padding:0.45rem 0.75rem; min-width:120px; text-align:center;">
+                                    <div style="color:#c4b5fd; font-size:0.72rem; font-weight:700; margin-bottom:0.25rem; letter-spacing:0.05em;">⏱ TIME TO BRIDGE</div>
+                                    <div style="color:#f5f3ff; font-size:0.88rem; font-weight:800;">{g_time}</div>
+                                </div>
+                            </div>
                         </div>
-                        """, unsafe_allow_html=True
+                        """,
+                        unsafe_allow_html=True
                     )
+            
+            # 4. Verdict
+            if verdict:
+                st.markdown(
+                    f"""
+                    <div class="explainability-card">
+                        <div class="explainability-header">Final Recruiter Verdict</div>
+                        <div style="font-size: 1rem; line-height: 1.6; color: #cbd5e1;">{verdict}</div>
+                    </div>
+                    """, unsafe_allow_html=True
+                )
         else:
-            st.write("No strengths highlighted.")
-            
-        st.write("")
-        
-        # 3. Gaps & Roadmap
-        st.markdown("#### Skill Gaps & Upskilling Roadmap")
-        gaps_list = skill_gap_json.get("Skill_Gaps_Found", [])
-        courses = skill_gap_json.get("Recommended_Courses_Certifications", [])
-        
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.markdown(
-                f"""
-                <div class="explainability-card" style="border-left-color: #f87171;">
-                    <h5 style="margin:0 0 0.8rem 0; color: #f8fafc;">Identified Missing Skills</h5>
-                    <ul style="margin:0; padding-left: 1.2rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.6;">
-                        {"".join(f"<li>{g}</li>" for g in gaps_list) if gaps_list else "<li>No missing skills found!</li>"}
-                    </ul>
-                </div>
-                """, unsafe_allow_html=True
-            )
-        with col_g2:
-            st.markdown(
-                f"""
-                <div class="explainability-card" style="border-left-color: #a78bfa;">
-                    <h5 style="margin:0 0 0.8rem 0; color: #f8fafc;">Upskilling Certifications</h5>
-                    <ul style="margin:0; padding-left: 1.2rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.6;">
-                        {"".join(f"<li>{c}</li>" for c in courses) if courses else "<li>No certifications recommended.</li>"}
-                    </ul>
-                </div>
-                """, unsafe_allow_html=True
-            )
-            
-        # 4. Verdict
-        verdict = skill_gap_json.get("Final_Recruiter_Verdict", "")
-        st.markdown(
-            f"""
-            <div class="explainability-card">
-                <div class="explainability-header">Final Recruiter Verdict</div>
-                <div style="font-size: 1rem; line-height: 1.6; color: #cbd5e1;">{verdict}</div>
-            </div>
-            """, unsafe_allow_html=True
-        )
+            # Fallback raw display
+            st.markdown("##### ⚠️ AI Skill Gap Output")
+            st.info(raw_json)
 
 def render_job_description_generator():
     st.markdown("### ✍️ AI Job Description Generator")
@@ -1889,7 +1976,7 @@ if candidates_df is not None and requirements_df is not None:
     min_experience = int(role_req["Min_Experience"])
     
     # 2. Render Conditional Sidebar Filters ONLY for Assessment Suite
-    if navigation_option == "Candidate Assessment Suite":
+    if navigation_option == "Candidate Ranking":
         st.sidebar.markdown("---")
         st.sidebar.markdown("### Filter Candidate Pool")
         
