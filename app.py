@@ -40,8 +40,7 @@ def safe_rerun():
 # ==========================================
 
 def render_landing_page(candidates_df, requirements_df):
-    st.markdown("### 🏢 Enterprise Talent Command Center")
-    st.markdown("Welcome to the **AI Recruitment & Talent Copilot**. This dashboard aggregates recruitment performance metrics, candidate analytics, automated screening logs, and onboarding progression.")
+    render_section_header("Enterprise Talent Command Center", "Welcome to the AI Recruitment & Talent Copilot. This dashboard aggregates recruitment performance metrics, candidate analytics, automated screening logs, and onboarding progression.", "🏢")
     
     # KPIs Row
     col1, col2, col3, col4 = st.columns(4)
@@ -88,20 +87,20 @@ def render_landing_page(candidates_df, requirements_df):
     with col_c1:
         st.markdown(
             """
-            <div style="background-color: #1e293b; padding: 1.2rem; border-radius: 10px; border: 1px solid #334155; height: 180px;">
+            <div class="quick-action-card">
                 <h5 style="color: #60a5fa; margin: 0 0 0.5rem 0; font-family: Sora;">Resume Center</h5>
                 <p style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.4;">Upload a candidate's resume and parse skills, experience, and certifications automatically using our simulated parser.</p>
             </div>
             """, unsafe_allow_html=True
         )
         if st.button("Go to Resume Uploader", key="go_upload", use_container_width=True):
-            st.session_state["nav_option"] = "Resume Upload Page"
+            st.session_state["nav_option"] = "Resume Matching"
             safe_rerun()
             
     with col_c2:
         st.markdown(
             """
-            <div style="background-color: #1e293b; padding: 1.2rem; border-radius: 10px; border: 1px solid #334155; height: 180px;">
+            <div class="quick-action-card">
                 <h5 style="color: #34d399; margin: 0 0 0.5rem 0; font-family: Sora;">Job Architect</h5>
                 <p style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.4;">Generate industry-compliant job descriptions instantly and insert them directly into the recruitment matching system.</p>
             </div>
@@ -114,14 +113,14 @@ def render_landing_page(candidates_df, requirements_df):
     with col_c3:
         st.markdown(
             """
-            <div style="background-color: #1e293b; padding: 1.2rem; border-radius: 10px; border: 1px solid #334155; height: 180px;">
+            <div class="quick-action-card">
                 <h5 style="color: #a78bfa; margin: 0 0 0.5rem 0; font-family: Sora;">Assessment Suite</h5>
                 <p style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.4;">Compare shortlisted candidates, inspect AI matching criteria trails, and view active bias audits.</p>
             </div>
             """, unsafe_allow_html=True
         )
         if st.button("Go to Assessments", key="go_assess", use_container_width=True):
-            st.session_state["nav_option"] = "Candidate Assessment Suite"
+            st.session_state["nav_option"] = "Candidate Ranking"
             safe_rerun()
             
     st.write("")
@@ -132,8 +131,7 @@ def render_landing_page(candidates_df, requirements_df):
         st.markdown(f"{read_dot} **{n['Message']}** ({n['Time']})")
 
 def render_candidate_portal(requirements_df):
-    st.markdown("### 📝 Candidate Application Portal")
-    st.markdown("Submit your application details below to apply for positions directly. The AI copilot will evaluate your profile against current requisitions.")
+    render_section_header("Candidate Application Portal", "Submit your application details below to apply for positions directly. The AI copilot will evaluate your profile against current requisitions.", "📝")
     
     with st.form("candidate_app_form", clear_on_submit=True):
         col_f1, col_f2 = st.columns(2)
@@ -475,298 +473,6 @@ def render_resume_upload(requirements_df):
 
 
 
-def render_resume_analysis(candidates_df, requirements_df):
-    st.markdown("### 📊 AI Resume Analysis Report")
-    
-    cand_names = sorted(candidates_df["Name"].tolist())
-    if not cand_names:
-        st.warning("No candidates available for analysis.")
-        return
-        
-    default_idx = 0
-    if "last_analyzed_candidate" in st.session_state:
-        lac = st.session_state["last_analyzed_candidate"]
-        if lac in cand_names:
-            default_idx = cand_names.index(lac)
-            
-    selected_name = st.selectbox("Select Candidate to Analyze", cand_names, index=default_idx)
-    
-    cand_data = candidates_df[candidates_df["Name"] == selected_name].iloc[0]
-    role_applied = cand_data["Role Applied"]
-    c_skills = [s.strip().lower() for s in cand_data["Skills"].split(",")]
-    
-    job_spec = requirements_df[requirements_df["Role"] == role_applied]
-    if not job_spec.empty:
-        req_skills = [s.strip().lower() for s in job_spec.iloc[0]["Required_Skills"].split(",")]
-        min_exp = int(job_spec.iloc[0]["Min_Experience"])
-    else:
-        req_skills = []
-        min_exp = 0
-        
-    matched = [s for s in req_skills if s in c_skills]
-    missing = [s for s in req_skills if s not in c_skills]
-    match_score = int((len(matched) / max(1, len(req_skills))) * 100)
-    
-    col_an_1, col_an_2 = st.columns([2, 1])
-    with col_an_1:
-        st.markdown(
-            f"""
-            <div class="explainability-card" style="margin-top: 0;">
-                <h4 style="margin:0; color:#f8fafc;">Resume Score Summary: {selected_name}</h4>
-                <p style="color:#94a3b8; margin:0.2rem 0 1rem 0;">Evaluated against: <strong>{role_applied}</strong></p>
-                <div style="font-size:1.1rem; line-height: 1.6; color:#cbd5e1;">
-                    ✔️ <strong>Matched Skills:</strong> <span style="color:#34d399;">{', '.join(matched) if matched else 'None'}</span><br>
-                    ❌ <strong>Skill Gaps:</strong> <span style="color:#f87171;">{', '.join(missing) if missing else 'None'}</span><br>
-                    📅 <strong>Experience Validation:</strong> Candidate has {cand_data['Experience_Years']} years (Job Requirement: {min_exp} years).
-                </div>
-            </div>
-            """, unsafe_allow_html=True
-        )
-        
-        st.markdown("#### 🤖 Core Resume Recommendations")
-        if not missing:
-            st.success("Excellent! The candidate matches all required skills for this position.")
-        else:
-            st.info(f"Recommended Upskilling: Suggest candidate completes certifications or projects in: **{', '.join(missing).upper()}**.")
-            
-        # Check cache
-        if "ai_analysis_cache" not in st.session_state:
-            st.session_state["ai_analysis_cache"] = {}
-        cache = st.session_state["ai_analysis_cache"].get(selected_name, {})
-        
-        if st.button("🤖 Run AI Skill Gap Analysis", key=f"run_ai_{selected_name}", use_container_width=True, type="primary"):
-            with st.spinner("Running deep AI analysis — this may take 10-20 seconds..."):
-                gap_res = skill_gap_analyser(
-                    candidate_skills=c_skills,
-                    required_skills=req_skills,
-                    experience_years=cand_data['Experience_Years'],
-                    min_experience=min_exp
-                )
-                resume_text_summary = f"Candidate Name: {selected_name}. Role Applied: {role_applied}. Skills: {cand_data['Skills']}. Experience: {cand_data['Experience_Years']} years."
-                job_desc_summary = f"Required Skills: {', '.join(req_skills)}. Minimum Experience: {min_exp} years."
-                match_res = resume_matching(resume_text=resume_text_summary, job_description=job_desc_summary)
-                
-                cache = {
-                    "skill_gap": gap_res,
-                    "match_summary": match_res
-                }
-                st.session_state["ai_analysis_cache"][selected_name] = cache
-                safe_rerun()
-
-        # ---- Render rich AI output ----
-        if cache and "skill_gap" in cache:
-            raw_json = cache["skill_gap"]
-            parsed = None
-            try:
-                import json, re
-                json_match = re.search(r"(\{.*\})", raw_json, re.DOTALL)
-                if json_match:
-                    parsed = json.loads(json_match.group(1))
-                else:
-                    cleaned = re.sub(r"```[\w]*\n?", "", raw_json).strip()
-                    parsed = json.loads(cleaned)
-            except Exception:
-                parsed = None
-
-            if parsed:
-                # ---- Hire Readiness Banner ----
-                score = parsed.get("hire_readiness_score", 0)
-                label = parsed.get("hire_readiness_label", "Unknown")
-                exp_note = parsed.get("experience_assessment", "")
-                verdict = parsed.get("overall_recommendation", "")
-
-                score_color = (
-                    "#34d399" if score >= 75 else
-                    "#f59e0b" if score >= 50 else
-                    "#f87171"
-                )
-                st.markdown(
-                    f"""
-                    <div style="background: linear-gradient(135deg, rgba(15,23,42,0.98), rgba(30,41,59,0.98));
-                                border: 2px solid {score_color}; border-radius: 14px;
-                                padding: 1.2rem 1.6rem; margin: 1rem 0; display: flex;
-                                justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-size:0.85rem; color:#94a3b8; margin-bottom:0.2rem; letter-spacing:0.08em;">AI HIRE READINESS</div>
-                            <div style="font-size:1.6rem; font-weight:800; color:{score_color};">{label}</div>
-                            <div style="font-size:0.92rem; color:#f1f5f9; margin-top:0.3rem; font-weight:500;">{exp_note}</div>
-                        </div>
-                        <div style="text-align:center;">
-                            <div style="font-size:3rem; font-weight:900; color:{score_color};">{score}</div>
-                            <div style="font-size:0.75rem; color:#cbd5e1; letter-spacing:0.06em;">/ 100 READINESS SCORE</div>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-                # ---- Key Strengths ----
-                strengths_raw = parsed.get("key_strengths", [])
-                # Normalise: model may return strings or dicts
-                strengths = [
-                    item if isinstance(item, dict) else {"skill": str(item), "note": ""}
-                    for item in strengths_raw
-                ]
-                if strengths:
-                    st.markdown("##### ⭐ Key Strengths")
-                    cols_str = st.columns(min(len(strengths), 3))
-                    for i, item in enumerate(strengths):
-                        with cols_str[i % 3]:
-                            skill_name = item.get("skill", str(item))
-                            skill_note = item.get("note", "")
-                            st.markdown(
-                                f"""
-                                <div style="background:rgba(20,83,45,0.35); border:1px solid #16a34a;
-                                            border-radius:10px; padding:0.85rem; margin-bottom:0.5rem;">
-                                    <div style="color:#0f172a; font-weight:700; font-size:0.95rem;">✅ {skill_name}</div>
-                                    <div style="color:#0f172a; font-size:0.83rem; margin-top:0.35rem; line-height:1.5;">{skill_note}</div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-
-                # ---- Growth Areas with Severity ----
-                growth_raw = parsed.get("growth_areas", [])
-                # Normalise: model may return strings or dicts
-                growth_areas = [
-                    item if isinstance(item, dict)
-                    else {"skill": str(item), "severity": "Medium", "gap_note": "", "recommendation": "", "time_to_bridge": "N/A"}
-                    for item in growth_raw
-                ]
-                if growth_areas:
-                    st.markdown("##### ⚠️ Skill Gap Analysis & Training Roadmap")
-                    severity_colors = {
-                        "Critical": ("#f87171", "#7f1d1d"),
-                        "High":     ("#fb923c", "#7c2d12"),
-                        "Medium":   ("#f59e0b", "#78350f"),
-                        "Low":      ("#a78bfa", "#3b0764"),
-                    }
-                    for gap in growth_areas:
-                        sev = gap.get("severity", "Medium") if isinstance(gap, dict) else "Medium"
-                        color, bg = severity_colors.get(sev, ("#94a3b8", "#1e293b"))
-                        g_skill   = gap.get("skill", "") if isinstance(gap, dict) else str(gap)
-                        g_note    = gap.get("gap_note", "") if isinstance(gap, dict) else ""
-                        g_rec     = gap.get("recommendation", "") if isinstance(gap, dict) else ""
-                        g_time    = gap.get("time_to_bridge", "N/A") if isinstance(gap, dict) else "N/A"
-                        st.markdown(
-                            f"""
-                            <div style="background:rgba(15,23,42,0.85); border-left:5px solid {color};
-                                        border-radius:0 10px 10px 0; padding:1rem 1.3rem; margin-bottom:0.8rem;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                                    <span style="color:#f8fafc; font-weight:800; font-size:1.05rem;">❌ {g_skill}</span>
-                                    <span style="background:{bg}; color:{color}; border:1px solid {color};
-                                                 border-radius:20px; padding:0.15rem 0.7rem;
-                                                 font-size:0.75rem; font-weight:700;">{sev.upper()}</span>
-                                </div>
-                                <div style="color:#e2e8f0; font-size:0.88rem; margin-bottom:0.7rem; line-height:1.5; font-weight:400;">{g_note}</div>
-                                <div style="display:flex; gap:1rem; flex-wrap:wrap;">
-                                    <div style="background:rgba(37,99,235,0.25); border:1px solid #3b82f6;
-                                                border-radius:6px; padding:0.45rem 0.75rem; flex:1; min-width:200px;">
-                                        <div style="color:#93c5fd; font-size:0.72rem; font-weight:700; margin-bottom:0.25rem; letter-spacing:0.05em;">📚 RECOMMENDED ACTION</div>
-                                        <div style="color:#f1f5f9; font-size:0.84rem; line-height:1.5;">{g_rec}</div>
-                                    </div>
-                                    <div style="background:rgba(109,40,217,0.25); border:1px solid #a78bfa;
-                                                border-radius:6px; padding:0.45rem 0.75rem; min-width:120px; text-align:center;">
-                                        <div style="color:#c4b5fd; font-size:0.72rem; font-weight:700; margin-bottom:0.25rem; letter-spacing:0.05em;">⏱ TIME TO BRIDGE</div>
-                                        <div style="color:#f5f3ff; font-size:0.88rem; font-weight:800;">{g_time}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-
-                # ---- Recruiter Verdict ----
-                if verdict:
-                    st.markdown(
-                        f"""
-                        <div style="background:rgba(30,64,175,0.2); border:1px solid #3b82f6;
-                                    border-radius:12px; padding:1.1rem 1.5rem; margin-top:1rem;">
-                            <div style="color:#93c5fd; font-weight:700; font-size:0.85rem; margin-bottom:0.5rem; letter-spacing:0.05em;">🧠 AI RECRUITER VERDICT</div>
-                            <div style="color:#0f172a; font-size:0.94rem; line-height:1.7; font-weight:500;">{verdict}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-            else:
-                # Fallback: raw text display if JSON parse fails
-                st.markdown("**AI Analysis Output:**")
-                st.info(raw_json)
-
-        elif not cache:
-            st.info("Click **'🤖 Run AI Skill Gap Analysis'** above to generate a full recruiter-grade AI analysis.")
-
-        st.write("")
-        with st.expander("🤖 AI Resume Match Summary", expanded=False):
-            if cache and "match_summary" in cache:
-                st.write(cache["match_summary"])
-            else:
-                st.info("Click 'Run AI Skill Gap Analysis' to generate AI Resume Match Summary.")
-
-            
-    with col_an_2:
-        st.markdown("#### 🎯 Overall Match Score")
-        fig = go.Figure(go.Indicator(
-            mode = "gauge+number",
-            value = match_score,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Resume Quality Index", 'font': {'color': "#f8fafc", 'size': 14}},
-            gauge = {
-                'axis': {'range': [0, 100], 'tickcolor': "#cbd5e1"},
-                'bar': {'color': "#3b82f6"},
-                'steps': [
-                    {'range': [0, 50], 'color': "rgba(220, 38, 38, 0.2)"},
-                    {'range': [50, 75], 'color': "rgba(245, 158, 11, 0.2)"},
-                    {'range': [75, 100], 'color': "rgba(16, 185, 129, 0.2)"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 75
-                }
-            }
-        ))
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#f8fafc", family="Inter"),
-            height=280,
-            margin=dict(t=30, b=10, l=10, r=10)
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    if "resume_chat_history" not in st.session_state:
-        st.session_state["resume_chat_history"] = {}
-    if selected_name not in st.session_state["resume_chat_history"]:
-        st.session_state["resume_chat_history"][selected_name] = []
-        
-    chat_history = st.session_state["resume_chat_history"][selected_name]
-    
-    st.markdown("---")
-    st.markdown("### 💬 Ask AI About This Candidate")
-    
-    for msg in chat_history:
-        bubble_class = "chat-bubble-user" if msg["role"] == "user" else "chat-bubble-assistant"
-        st.markdown(f'<div class="{bubble_class}">{msg["content"]}</div>', unsafe_allow_html=True)
-        
-    chat_col1, chat_col2 = st.columns([4, 1])
-    with chat_col1:
-        question_input = st.text_input(
-            "Ask a question about this candidate...",
-            key=f"q_input_{selected_name}",
-            placeholder="e.g. Does this candidate have experience leading teams?"
-        )
-    with chat_col2:
-        ask_clicked = st.button("Ask", key=f"ask_btn_{selected_name}", use_container_width=True)
-        
-    if ask_clicked and question_input.strip():
-        chat_history.append({"role": "user", "content": question_input.strip()})
-        resume_text_summary = f"Candidate Name: {selected_name}. Role Applied: {role_applied}. Skills: {cand_data['Skills']}. Experience: {cand_data['Experience_Years']} years."
-        with st.spinner("Asking AI..."):
-            ans = resume_chat(candidate_context=resume_text_summary, question=question_input.strip())
-        chat_history.append({"role": "assistant", "content": ans})
-        safe_rerun()
-
 def render_job_description_generator():
     st.markdown("### ✍️ AI Job Description Generator")
     st.markdown("Generate optimized, SEO-friendly job descriptions using AI parameters and immediately inject them into the screening pool.")
@@ -896,8 +602,7 @@ def render_hiring_pipeline():
                         safe_rerun()
 
 def render_interview_feedback(candidates_df):
-    st.markdown("### 🖋️ Interview Feedback Portal")
-    st.markdown("Submit structured scorecards and qualitative evaluations for candidates after completing interviews.")
+    render_section_header("Interview Feedback Portal", "Submit structured scorecards and qualitative evaluations for candidates after completing interviews.", "🖋️")
     
     cand_names = sorted(candidates_df["Name"].tolist())
     if not cand_names:
@@ -986,8 +691,7 @@ def render_interview_feedback(candidates_df):
             st.markdown(st.session_state["ai_discussion_analysis"][ai_selected_cand])
 
 def render_offer_letter_generator(candidates_df):
-    st.markdown("### ✉️ AI Offer Letter & Email Generator")
-    st.markdown("Generate official compensation packages, interview invitations, or candidate follow-up emails, and send them directly.")
+    render_section_header("AI Offer Letter & Email Generator", "Generate official compensation packages, interview invitations, or candidate follow-up emails, and send them directly.", "✉️")
     
     email_type = st.selectbox("Email Type", [
         "Offer Letter (AI Generated)", 
@@ -1722,188 +1426,53 @@ if "candidates_db" in st.session_state and len(st.session_state["candidates_db"]
 else:
     candidates_df = candidates_df_raw
 
-# 7. Apply a custom theme via st.markdown
-custom_css = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+# 7. Apply a custom theme via theme.css
+theme_css_path = os.path.join("assets", "theme.css")
+if os.path.exists(theme_css_path):
+    with open(theme_css_path, "r", encoding="utf-8") as f:
+        custom_css = f"<style>{f.read()}</style>"
+    st.markdown(custom_css, unsafe_allow_html=True)
 
-/* Main font application */
-html, body, [class*="css"], .stMarkdown {
-    font-family: 'Inter', 'Sora', sans-serif;
-}
+# Helper functions for consolidated design components
+def render_section_header(title: str, subtitle: str = None, icon: str = None):
+    icon_str = f"{icon} " if icon else ""
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.75rem;">
+            <h3 style="font-family: 'Sora', sans-serif; font-size: 1.60rem; font-weight: 700; color: var(--color-text-primary); margin: 0;">
+                {icon_str}{title}
+            </h3>
+            {f'<p style="color: var(--color-text-secondary); font-size: 0.92rem; margin-top: 0.25rem; margin-bottom: 0;">{subtitle}</p>' if subtitle else ''}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-/* Custom header with gradient */
-.header-container {
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
-    padding: 2rem;
-    border-radius: 16px;
-    margin-bottom: 2rem;
-    border: 1px solid #2d3748;
-    color: #f8fafc;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-}
+def render_metric_card(label: str, value: str, color: str = None, icon: str = None):
+    icon_str = f"<span style='font-size: 1.5rem; margin-bottom: 0.5rem; display: block;'>{icon}</span>" if icon else ""
+    color_style = f"style='color: {color};'" if color else ""
+    return f"""
+    <div class="audit-metric-card">
+        {icon_str}
+        <div class="audit-number" {color_style}>{value}</div>
+        <div class="audit-label">{label}</div>
+    </div>
+    """
 
-.header-title {
-    font-family: 'Sora', sans-serif;
-    font-size: 2.2rem;
-    font-weight: 700;
-    margin: 0;
-    background: linear-gradient(to right, #60a5fa, #34d399);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.header-subtitle {
-    font-size: 1.1rem;
-    opacity: 0.8;
-    margin-top: 0.5rem;
-    color: #cbd5e1;
-}
-
-/* Styled Card container for candidate details */
-.candidate-card {
-    background-color: #1e293b;
-    border-radius: 12px;
-    padding: 1.2rem 1.5rem;
-    margin-bottom: 1rem;
-    border: 1px solid #334155;
-    transition: transform 0.2s, box-shadow 0.2s;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.candidate-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
-    border-color: #475569;
-}
-
-.score-badge {
-    background-color: #0f172a;
-    border: 1px solid #3b82f6;
-    color: #60a5fa;
-    padding: 0.2rem 0.6rem;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    display: inline-block;
-}
-
-.shortlisted-badge {
-    background-color: #064e3b;
-    border: 1px solid #059669;
-    color: #34d399;
-    padding: 0.2rem 0.6rem;
-    border-radius: 20px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    display: inline-block;
-}
-
-.explainability-card {
-    background-color: #1e293b;
-    border-left: 5px solid #3b82f6;
-    padding: 1.5rem;
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
-    border-top: 1px solid #334155;
-    border-right: 1px solid #334155;
-    border-bottom: 1px solid #334155;
-}
-
-.explainability-header {
-    font-family: 'Sora', sans-serif;
-    font-weight: 600;
-    font-size: 1.3rem;
-    color: #f8fafc;
-    margin-bottom: 0.8rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.audit-metric-card {
-    background-color: #1e293b;
-    border: 1px solid #334155;
-    padding: 1.2rem;
-    border-radius: 10px;
-    text-align: center;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.audit-number {
-    font-family: 'Sora', sans-serif;
-    font-size: 2.2rem;
-    font-weight: 700;
-    color: #60a5fa;
-}
-
-.audit-label {
-    font-size: 0.9rem;
-    color: #94a3b8;
-    margin-top: 0.3rem;
-}
-
-/* Chat bubble styling */
-.chat-bubble-user {
-    background-color: #1e3a8a;
-    color: #f8fafc;
-    padding: 0.8rem 1.2rem;
-    border-radius: 16px 16px 4px 16px;
-    margin-bottom: 0.8rem;
-    max-width: 80%;
-    margin-left: auto;
-    text-align: right;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    border: 1px solid #3b82f6;
-}
-
-.chat-bubble-assistant {
-    background-color: #1e293b;
-    color: #cbd5e1;
-    padding: 0.8rem 1.2rem;
-    border-radius: 16px 16px 16px 4px;
-    margin-bottom: 0.8rem;
-    max-width: 80%;
-    margin-right: auto;
-    text-align: left;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    border: 1px solid #334155;
-}
-
-/* Calendar Card styling */
-.calendar-card {
-    background-color: #1e293b;
-    padding: 1rem;
-    border-radius: 10px;
-    margin-bottom: 0.8rem;
-    border-top: 1px solid #334155;
-    border-right: 1px solid #334155;
-    border-bottom: 1px solid #334155;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-
-/* Timeline/Experience Tracker */
-.timeline-item {
-    border-left: 2px solid #3b82f6;
-    padding-left: 1.2rem;
-    margin-left: 0.6rem;
-    padding-bottom: 1.2rem;
-    position: relative;
-}
-
-.timeline-marker {
-    width: 12px;
-    height: 12px;
-    background-color: #60a5fa;
-    border-radius: 50%;
-    position: absolute;
-    left: -7px;
-    top: 4px;
-    border: 2px solid #0f172a;
-}
-</style>
-"""
-st.markdown(custom_css, unsafe_allow_html=True)
+def apply_custom_plotly_layout(fig):
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#f8fafc", family="Inter"),
+        margin=dict(t=25, b=25, l=25, r=25),
+        modebar=dict(bgcolor="rgba(0,0,0,0)", color="#cbd5e1")
+    )
+    try:
+        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="#334155", zeroline=False, tickcolor="#334155")
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="#334155", zeroline=False, tickcolor="#334155")
+    except Exception:
+        pass
+    return fig
 
 # Main Dashboard Layout
 # Title Bar containing Logo & Main Heading
@@ -1939,50 +1508,105 @@ if candidates_df is not None and requirements_df is not None:
     # 1. Global Navigation in Sidebar
     st.sidebar.markdown("### Navigation Module")
     
-    if "nav_option" not in st.session_state:
-        st.session_state["nav_option"] = "Landing / Welcome Page"
+    if "nav_option" not in st.session_state or st.session_state["nav_option"] == "Landing / Welcome Page":
+        st.session_state["nav_option"] = "Landing Page"
         
     workspaces_list = [
-        "Landing / Welcome Page",
+        "Landing Page",
+        "Job Discussion Analyzer",
+        "Resume Matching",
+        "Resume Chat / Q&A",
+        "Skill Gap Analyser",
+        "Interview Question Generator",
+        "AI Email Generator",
+        "Candidate Ranking",
+        "Hiring Recommendation",
+        "Talent Insight AI Module",
+        "Recruitment Analysis AI Module",
+        "Talent management",
+        "AI chatbot assistant",
         "Candidate Application Portal",
-        "Resume Upload Page",
-        "Resume Analysis Report",
-        "Candidate Assessment Suite",
         "AI Job Description Generator",
         "Recruitment Workflow / Hiring Pipeline",
-        "Interview Feedback Page",
-        "AI Interview Question Generator",
-        "Offer Letter Generator",
         "Employee Onboarding Page",
-        "AI Recommendation / Decision Support",
-        "Pipeline Dashboard",
         "Job Role Management (CRUD)",
         "Candidate Profile Browser",
         "Interview Scheduler & Calendar",
         "Notifications Center",
-        "Advanced HR Analytics",
-        "Employee Directory",
-        "AI Chatbot Assistant",
         "Reports & Export Page",
         "Help & Support Page",
         "About Project Page",
         "System Settings"
     ]
     
-    current_idx = 0
-    if st.session_state["nav_option"] in workspaces_list:
-        current_idx = workspaces_list.index(st.session_state["nav_option"])
+    if st.session_state["nav_option"] not in workspaces_list:
+        st.session_state["nav_option"] = "Landing Page"
         
-    navigation_option = st.sidebar.selectbox(
-        "Select Workspace",
-        workspaces_list,
-        index=current_idx,
-        key="nav_selectbox"
-    )
-    
-    if st.session_state["nav_selectbox"] != st.session_state["nav_option"]:
-        st.session_state["nav_option"] = st.session_state["nav_selectbox"]
+    # Group 1: General
+    st.sidebar.markdown("#### 🏢 General")
+    landing_active = "primary" if st.session_state["nav_option"] == "Landing Page" else "secondary"
+    if st.sidebar.button("🏠 Landing Page", key="btn_nav_landing", type=landing_active, use_container_width=True):
+        st.session_state["nav_option"] = "Landing Page"
         safe_rerun()
+        
+    # Group 2: Core AI Co-Pilots
+    with st.sidebar.expander("🤖 Core AI Co-Pilots", expanded=True):
+        ai_modules = [
+            ("1. Job Discussion Analyzer", "Job Discussion Analyzer"),
+            ("2. Resume Matching", "Resume Matching"),
+            ("3. Resume Chat / Q&A", "Resume Chat / Q&A"),
+            ("4. Skill Gap Analyser", "Skill Gap Analyser"),
+            ("5. Interview Question Gen", "Interview Question Generator"),
+            ("6. AI Email Generator", "AI Email Generator"),
+            ("7. Candidate Ranking", "Candidate Ranking"),
+            ("8. Hiring Recommendation", "Hiring Recommendation"),
+            ("9. Talent Insight AI Module", "Talent Insight AI Module"),
+            ("10. Recruitment Analysis AI", "Recruitment Analysis AI Module"),
+            ("11. Talent management", "Talent management"),
+            ("12. AI chatbot assistant", "AI chatbot assistant")
+        ]
+        for label, page in ai_modules:
+            btn_type = "primary" if st.session_state["nav_option"] == page else "secondary"
+            clean_key = page.replace(" ", "_").replace("/", "_").replace("&", "_").replace(".", "_").replace("(", "_").replace(")", "_").lower()
+            if st.button(label, key=f"btn_nav_{clean_key}", type=btn_type, use_container_width=True):
+                st.session_state["nav_option"] = page
+                safe_rerun()
+                
+    # Group 3: Sourcing & Workflow
+    with st.sidebar.expander("💼 Sourcing & Workflow", expanded=False):
+        workflow_modules = [
+            ("Candidate Portal", "Candidate Application Portal"),
+            ("Job Description Gen", "AI Job Description Generator"),
+            ("Hiring Pipeline", "Recruitment Workflow / Hiring Pipeline"),
+            ("Employee Onboarding", "Employee Onboarding Page"),
+            ("Candidate Browser", "Candidate Profile Browser"),
+            ("Scheduler & Calendar", "Interview Scheduler & Calendar")
+        ]
+        for label, page in workflow_modules:
+            btn_type = "primary" if st.session_state["nav_option"] == page else "secondary"
+            clean_key = page.replace(" ", "_").replace("/", "_").replace("&", "_").replace(".", "_").replace("(", "_").replace(")", "_").lower()
+            if st.button(label, key=f"btn_nav_{clean_key}", type=btn_type, use_container_width=True):
+                st.session_state["nav_option"] = page
+                safe_rerun()
+                
+    # Group 4: Administration & System
+    with st.sidebar.expander("⚙️ Admin & Settings", expanded=False):
+        admin_modules = [
+            ("Job Role CRUD", "Job Role Management (CRUD)"),
+            ("Notifications Center", "Notifications Center"),
+            ("Reports & Export", "Reports & Export Page"),
+            ("Help & Support", "Help & Support Page"),
+            ("About Project", "About Project Page"),
+            ("System Settings", "System Settings")
+        ]
+        for label, page in admin_modules:
+            btn_type = "primary" if st.session_state["nav_option"] == page else "secondary"
+            clean_key = page.replace(" ", "_").replace("/", "_").replace("&", "_").replace(".", "_").replace("(", "_").replace(")", "_").lower()
+            if st.button(label, key=f"btn_nav_{clean_key}", type=btn_type, use_container_width=True):
+                st.session_state["nav_option"] = page
+                safe_rerun()
+
+    navigation_option = st.session_state["nav_option"]
     
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Target Job Role")
@@ -2063,17 +1687,23 @@ if candidates_df is not None and requirements_df is not None:
         display_candidates = display_candidates[display_candidates["Skills"].apply(matches_skills)]
 
     # ------------------ NEW CUSTOM WORKSPACE MODULES ROUTING ------------------
-    if navigation_option == "Landing / Welcome Page":
+    if navigation_option == "Landing Page":
         render_landing_page(candidates_df_calc, requirements_df)
+        
+    elif navigation_option == "Job Discussion Analyzer":
+        render_interview_feedback(candidates_df_calc)
+        
+    elif navigation_option == "Resume Matching":
+        render_resume_matching_page(candidates_df_calc, requirements_df)
+        
+    elif navigation_option == "Resume Chat / Q&A":
+        render_resume_chat_page(candidates_df_calc, requirements_df)
+        
+    elif navigation_option == "Skill Gap Analyser":
+        render_skill_gap_page(candidates_df_calc, requirements_df)
         
     elif navigation_option == "Candidate Application Portal":
         render_candidate_portal(requirements_df)
-        
-    elif navigation_option == "Resume Upload Page":
-        render_resume_upload(requirements_df)
-        
-    elif navigation_option == "Resume Analysis Report":
-        render_resume_analysis(candidates_df_calc, requirements_df)
         
     elif navigation_option == "AI Job Description Generator":
         render_job_description_generator()
@@ -2081,10 +1711,7 @@ if candidates_df is not None and requirements_df is not None:
     elif navigation_option == "Recruitment Workflow / Hiring Pipeline":
         render_hiring_pipeline()
         
-    elif navigation_option == "Interview Feedback Page":
-        render_interview_feedback(candidates_df_calc)
-        
-    elif navigation_option == "AI Interview Question Generator":
+    elif navigation_option == "Interview Question Generator":
         st.markdown("### ❓ AI Interview Question Generator")
         st.markdown("Generate highly customized technical, behavioral, and coding questions based on the candidate's target role and required skill focus.")
         
@@ -2142,13 +1769,13 @@ if candidates_df is not None and requirements_df is not None:
                     else:
                         st.info("No questions generated for this category.")
         
-    elif navigation_option == "Offer Letter Generator":
+    elif navigation_option == "AI Email Generator":
         render_offer_letter_generator(candidates_df_calc)
         
     elif navigation_option == "Employee Onboarding Page":
         render_onboarding_page()
         
-    elif navigation_option == "AI Recommendation / Decision Support":
+    elif navigation_option == "Hiring Recommendation":
         render_decision_support(candidates_df_calc, requirements_df)
         
     elif navigation_option == "Reports & Export Page":
@@ -2161,7 +1788,8 @@ if candidates_df is not None and requirements_df is not None:
         render_about_page()
 
     # ------------------ MODULE 1: ASSESSMENT SUITE (ORIGINAL 3 TABS) ------------------
-    elif navigation_option == "Candidate Assessment Suite":
+    elif navigation_option == "Candidate Ranking":
+        render_section_header("Candidate Assessment Suite", f"Compare shortlisted candidates, inspect AI matching criteria trails, and view active bias audits for {selected_role}.", "🏆")
         
         tab_pool, tab_explain, tab_bias = st.tabs([
             "Candidate Pool", 
@@ -2333,7 +1961,7 @@ if candidates_df is not None and requirements_df is not None:
                 )
                 
                 fig = go.Figure(data=radar_data, layout=layout)
-                
+                fig = apply_custom_plotly_layout(fig)
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # 2. Explainability Ledger
@@ -2493,8 +2121,8 @@ if candidates_df is not None and requirements_df is not None:
             st.caption("**Fairness Auditor Note:** This tool evaluates simple statistical distribution skews on selected parameters. It is a rule-based heuristic check intended for decision support, not an automated legal fairness/ML audit.")
 
     # ------------------ MODULE 2: PIPELINE DASHBOARD ------------------
-    elif navigation_option == "Pipeline Dashboard":
-        st.markdown("### Pipeline Dashboard Overview")
+    elif navigation_option == "Recruitment Analysis AI Module":
+        render_section_header("Pipeline Dashboard Overview", "Track active job openings, applicant pipelines, shortlists, and key recruitment insights.", "📊")
         
         # Dashboard KPIs
         col1, col2, col3, col4 = st.columns(4)
@@ -2547,13 +2175,8 @@ if candidates_df is not None and requirements_df is not None:
                 text=role_counts["Count"],
                 textposition='auto'
             )])
-            fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#f8fafc", family="Inter"),
-                margin=dict(t=20, b=20, l=20, r=20),
-                height=300
-            )
+            fig = apply_custom_plotly_layout(fig)
+            fig.update_layout(height=300)
             st.plotly_chart(fig, use_container_width=True)
             
         with col_chart2:
@@ -2571,14 +2194,8 @@ if candidates_df is not None and requirements_df is not None:
                 hole=.4,
                 marker=dict(colors=["#34d399", "#1e293b"])
             )])
-            fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#f8fafc", family="Inter"),
-                margin=dict(t=20, b=20, l=20, r=20),
-                height=300,
-                showlegend=True
-            )
+            fig = apply_custom_plotly_layout(fig)
+            fig.update_layout(height=300, showlegend=True)
             st.plotly_chart(fig, use_container_width=True)
             
         st.markdown("---")
@@ -2873,8 +2490,8 @@ if candidates_df is not None and requirements_df is not None:
                 )
 
     # ------------------ MODULE 7: HR ANALYTICS & INSIGHTS ------------------
-    elif navigation_option == "Advanced HR Analytics":
-        st.markdown("### Advanced HR Recruitment Analytics")
+    elif navigation_option == "Talent Insight AI Module":
+        render_section_header("Advanced HR Recruitment Analytics", "Analyze macro-level organization performance, match score spread, and candidate experience distributions.", "📈")
         
         # 1. Row 1 charts
         col_an1, col_an2 = st.columns(2)
@@ -2889,13 +2506,8 @@ if candidates_df is not None and requirements_df is not None:
                 text=[f"{val:.1f}%" for val in avg_matches["Match_Score"]],
                 textposition='auto'
             )])
-            fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#f8fafc", family="Inter"),
-                margin=dict(t=20, b=20, l=20, r=20),
-                height=300
-            )
+            fig = apply_custom_plotly_layout(fig)
+            fig.update_layout(height=300)
             st.plotly_chart(fig, use_container_width=True)
             
         with col_an2:
@@ -2917,13 +2529,8 @@ if candidates_df is not None and requirements_df is not None:
                 hole=.4,
                 marker=dict(colors=["#3b82f6", "#a78bfa", "#f59e0b"])
             )])
-            fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#f8fafc", family="Inter"),
-                margin=dict(t=20, b=20, l=20, r=20),
-                height=300
-            )
+            fig = apply_custom_plotly_layout(fig)
+            fig.update_layout(height=300)
             st.plotly_chart(fig, use_container_width=True)
             
         st.markdown("---")
@@ -2936,13 +2543,10 @@ if candidates_df is not None and requirements_df is not None:
             marker_color="#a78bfa",
             opacity=0.75
         )])
+        fig_hist = apply_custom_plotly_layout(fig_hist)
         fig_hist.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#f8fafc", family="Inter"),
             xaxis=dict(title="Match Score (%)"),
             yaxis=dict(title="Number of Candidates"),
-            margin=dict(t=20, b=20, l=20, r=20),
             height=280
         )
         st.plotly_chart(fig_hist, use_container_width=True)
@@ -2963,8 +2567,8 @@ if candidates_df is not None and requirements_df is not None:
             st.info(st.session_state["ai_org_talent_insight"])
 
     # ------------------ MODULE 8: EMPLOYEE DIRECTORY ------------------
-    elif navigation_option == "Employee Directory":
-        st.markdown("### Corporate Employee Directory")
+    elif navigation_option == "Talent management":
+        render_section_header("Corporate Employee Directory", "Search, filter, and review active team members, contact details, and internal ratings.", "👥")
         
         # Metrics
         col_dir1, col_dir2, col_dir3 = st.columns(3)
@@ -3076,7 +2680,7 @@ if candidates_df is not None and requirements_df is not None:
                 safe_rerun()
 
     # ------------------ MODULE 9: AI CHATBOT ASSISTANT ------------------
-    elif navigation_option == "AI Chatbot Assistant":
+    elif navigation_option == "AI chatbot assistant":
         # Initialize session state variables if not present
         if "resume_text" not in st.session_state:
             st.session_state["resume_text"] = None
