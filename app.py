@@ -1793,11 +1793,11 @@ def render_section_header(title: str, subtitle: str = None, icon: str = None):
     icon_str = f"{icon} " if icon else ""
     st.markdown(
         f"""
-        <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.75rem;">
-            <h3 style="font-family: 'Sora', sans-serif; font-size: 1.60rem; font-weight: 700; color: var(--color-text-primary); margin: 0;">
+        <div style="margin-bottom: 1.5rem; border-bottom: 2px solid #334155; padding-bottom: 0.75rem;">
+            <h3 style="font-family: 'Sora', sans-serif; font-size: 1.60rem; font-weight: 700; color: #0f172a; margin: 0;">
                 {icon_str}{title}
             </h3>
-            {f'<p style="color: var(--color-text-secondary); font-size: 0.92rem; margin-top: 0.25rem; margin-bottom: 0;">{subtitle}</p>' if subtitle else ''}
+            {f'<p style="color: #475569; font-size: 0.92rem; margin-top: 0.25rem; margin-bottom: 0;">{subtitle}</p>' if subtitle else ''}
         </div>
         """,
         unsafe_allow_html=True
@@ -2075,18 +2075,38 @@ if candidates_df is not None and requirements_df is not None:
         q_skills = st.multiselect("Skills to Focus on", options=sorted(list(all_skills)), key="q_skills_select")
         q_difficulty = st.select_slider("Difficulty Level", ["Easy", "Medium", "Hard"], value="Medium", key="q_diff_slider")
         
-        if st.button("Generate Questions", key="generate_questions_btn", use_container_width=True):
-            with st.spinner("Generating interview questions..."):
-                questions_out = interview_question_generator(
-                    role=q_role,
-                    experience=q_experience,
-                    skills=q_skills,
-                    difficulty=q_difficulty
-                )
-                st.session_state["generated_questions"] = questions_out
+        col_btn_q, col_btn_clr = st.columns([5, 1])
+        with col_btn_q:
+            if st.button("Generate Questions", key="generate_questions_btn", use_container_width=True):
+                with st.spinner("Generating interview questions..."):
+                    questions_out = interview_question_generator(
+                        role=q_role,
+                        experience=q_experience,
+                        skills=q_skills,
+                        difficulty=q_difficulty
+                    )
+                    st.session_state["generated_questions"] = questions_out
+                    st.session_state["generated_questions_config"] = f"{q_role} | {q_experience} yrs | {q_difficulty}"
+                    safe_rerun()
+        with col_btn_clr:
+            if st.button("🗑 Clear", key="clear_questions_btn", use_container_width=True):
+                st.session_state.pop("generated_questions", None)
+                st.session_state.pop("generated_questions_config", None)
+                safe_rerun()
                 
         if "generated_questions" in st.session_state:
             st.markdown("---")
+            # Show what config this was generated for
+            cfg = st.session_state.get("generated_questions_config", "")
+            if cfg:
+                st.markdown(
+                    f'<div style="background:rgba(59,130,246,0.12); border:1px solid #3b82f6; '
+                    f'border-radius:8px; padding:0.6rem 1rem; margin-bottom:1rem; font-size:0.88rem; color:#1e3a8a; font-weight:600;">'
+                    f'🤖 AI Questions generated for: <strong>{cfg}</strong> &nbsp;|&nbsp; '
+                    f'<span style="color:#475569; font-weight:400;">Navigate freely — results are saved until you click 🗑 Clear</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
             raw_text = st.session_state["generated_questions"]
             
             sections = {
@@ -2099,30 +2119,28 @@ if candidates_df is not None and requirements_df is not None:
             current_header = None
             for line in raw_text.split("\n"):
                 lower_line = line.lower()
-                if "#### technical questions" in lower_line:
+                if "technical question" in lower_line:
                     current_header = "Technical Questions"
-                elif "#### hr questions" in lower_line:
+                elif "hr question" in lower_line:
                     current_header = "HR Questions"
-                elif "#### coding questions" in lower_line:
+                elif "coding question" in lower_line:
                     current_header = "Coding Questions"
-                elif "#### scenario questions" in lower_line:
+                elif "scenario question" in lower_line:
                     current_header = "Scenario Questions"
-                elif line.strip().startswith("####"):
+                elif line.strip().startswith("#") and not any(k in lower_line for k in ["technical", "hr", "coding", "scenario"]):
                     current_header = None
                 else:
                     if current_header:
                         sections[current_header] += line + "\n"
                         
-            # If all sections are empty, we display the raw text as fallback
-            if not any(sections.values()):
-                st.markdown(raw_text)
-            else:
+            # If parsing successfully separated all 4 sections, display them formatted
+            if all(v.strip() for v in sections.values()):
                 for header, content in sections.items():
                     st.markdown(f"#### {header}")
-                    if content.strip():
-                        st.markdown(content.strip())
-                    else:
-                        st.info("No questions generated for this category.")
+                    st.markdown(content.strip())
+            else:
+                # Fallback: display the complete raw response directly so no content is omitted
+                st.markdown(raw_text)
         
     elif navigation_option == "AI Email Generator":
         render_offer_letter_generator(candidates_df_calc)
@@ -2554,18 +2572,26 @@ if candidates_df is not None and requirements_df is not None:
             st.plotly_chart(fig, use_container_width=True)
             
         st.markdown("---")
-        if st.button("🤖 Generate AI Recruitment Insight", key="ai_recruitment_insight", use_container_width=True):
-            rc = candidates_df["Role Applied"].value_counts()
-            with st.spinner("Analyzing pipeline and generating insights..."):
-                insight = recruitment_analysis(
-                    total_openings=len(requirements_df),
-                    total_applicants=len(candidates_df),
-                    total_shortlisted=len(st.session_state["shortlist"]),
-                    role_counts=rc.to_dict()
-                )
-            st.session_state["ai_pipeline_insight"] = insight
+        col_rec_btn, col_rec_clr = st.columns([5, 1])
+        with col_rec_btn:
+            if st.button("🤖 Generate AI Recruitment Insight", key="ai_recruitment_insight", use_container_width=True):
+                rc = candidates_df["Role Applied"].value_counts()
+                with st.spinner("Analyzing pipeline and generating insights..."):
+                    insight = recruitment_analysis(
+                        total_openings=len(requirements_df),
+                        total_applicants=len(candidates_df),
+                        total_shortlisted=len(st.session_state["shortlist"]),
+                        role_counts=rc.to_dict()
+                    )
+                st.session_state["ai_pipeline_insight"] = insight
+                safe_rerun()
+        with col_rec_clr:
+            if st.button("🗑 Clear", key="clear_pipeline_insight_btn", use_container_width=True):
+                st.session_state.pop("ai_pipeline_insight", None)
+                safe_rerun()
             
         if "ai_pipeline_insight" in st.session_state:
+            st.markdown("##### 🤖 AI Pipeline Insight (Persisted)")
             st.info(st.session_state["ai_pipeline_insight"])
 
     # ------------------ MODULE 3: JOB MANAGEMENT (CRUD) ------------------
@@ -2907,18 +2933,25 @@ if candidates_df is not None and requirements_df is not None:
         st.plotly_chart(fig_hist, use_container_width=True)
         
         st.markdown("---")
-        if st.button("🤖 Generate Organizational Talent Insight", key="ai_talent_insight", use_container_width=True):
-            band_counts_dict = dict(zip(band_counts["Band"], band_counts["Count"]))
-            avg_matches_dict = dict(zip(avg_matches["Role Applied"], avg_matches["Match_Score"]))
-            with st.spinner("Analyzing macro-level organizational talent data..."):
-                insight_res = talent_insight(
-                    avg_match_by_role=avg_matches_dict,
-                    experience_band_distribution=band_counts_dict
-                )
-            st.session_state["ai_org_talent_insight"] = insight_res
+        col_ti_btn, col_ti_clr = st.columns([5, 1])
+        with col_ti_btn:
+            if st.button("🤖 Generate Organizational Talent Insight", key="ai_talent_insight", use_container_width=True):
+                band_counts_dict = dict(zip(band_counts["Band"], band_counts["Count"]))
+                avg_matches_dict = dict(zip(avg_matches["Role Applied"], avg_matches["Match_Score"]))
+                with st.spinner("Analyzing macro-level organizational talent data..."):
+                    insight_res = talent_insight(
+                        avg_match_by_role=avg_matches_dict,
+                        experience_band_distribution=band_counts_dict
+                    )
+                st.session_state["ai_org_talent_insight"] = insight_res
+                safe_rerun()
+        with col_ti_clr:
+            if st.button("🗑 Clear", key="clear_talent_insight_btn", use_container_width=True):
+                st.session_state.pop("ai_org_talent_insight", None)
+                safe_rerun()
             
         if "ai_org_talent_insight" in st.session_state:
-            st.markdown("#### Organizational Talent Insight")
+            st.markdown("#### 🤖 Organizational Talent Insight (Persisted)")
             st.info(st.session_state["ai_org_talent_insight"])
 
     # ------------------ MODULE 8: EMPLOYEE DIRECTORY ------------------
@@ -3232,6 +3265,7 @@ if candidates_df is not None and requirements_df is not None:
             chat_input_val = st.chat_input("Ask your query here...")
 
             # Chat Logic triggered
+            user_query = None
             if q1_clicked:
                 user_query = "Who is top matched Software Engineer?"
             elif q2_clicked:

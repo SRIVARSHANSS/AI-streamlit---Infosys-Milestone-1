@@ -14,4 +14,5 @@ def email_generator(candidate_name: str, email_type: str, context: str = "") -> 
         f"Additional Context/Details:\n{context}\n\n"
         f"Generate a complete, high-quality, professional email body suitable for sending to the candidate."
     )
-    return ask_ai(prompt, system)
+    return ask_ai(prompt, system, num_predict=2048)
+

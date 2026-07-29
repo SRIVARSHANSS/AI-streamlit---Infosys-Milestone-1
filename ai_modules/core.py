@@ -2,7 +2,7 @@ import ollama
 
 MODEL = "gemma3:4b"
 
-def ask_ai(prompt: str, system: str = "", num_predict: int = 900) -> str:
+def ask_ai(prompt: str, system: str = "", num_predict: int = 2048) -> str:
     messages = []
     # Check if the system prompt is requesting a structured JSON format or chatbot/copilot behavior
     is_json_request = system and ("json" in system.lower() or "{" in system)
@@ -11,12 +11,13 @@ def ask_ai(prompt: str, system: str = "", num_predict: int = 900) -> str:
     if is_json_request or is_chatbot_request:
         full_system = system
     else:
-        # Globally instruct the model to produce detailed, exhaustive analyses rather than short summaries
-        detailed_instruction = (
-            " Always write a highly detailed, comprehensive, and exhaustive response. "
-            "Provide thorough breakdowns and deep reasoning. Avoid brief or single-sentence answers."
+        # Globally instruct the model to produce complete, structured, and non-truncated responses
+        complete_instruction = (
+            " You MUST always provide a full, complete, and fully-formed response. "
+            "NEVER stop mid-sentence or omit requested sections/headers. "
+            "Write clear, optimized, structured, and professional answers that complete every point thoroughly."
         )
-        full_system = (system + detailed_instruction) if system else ("You are a helpful recruitment assistant." + detailed_instruction)
+        full_system = (system + complete_instruction) if system else ("You are a helpful recruitment assistant." + complete_instruction)
     
     messages.append({"role": "system", "content": full_system})
     messages.append({"role": "user", "content": prompt})
@@ -26,7 +27,7 @@ def ask_ai(prompt: str, system: str = "", num_predict: int = 900) -> str:
             messages=messages,
             options={
                 "temperature": 0.3,
-                "num_predict": num_predict,  # Use dynamically set prediction limit
+                "num_predict": num_predict,  # Set prediction limit to 2048 tokens to avoid truncation
                 "top_k": 40,
                 "top_p": 0.9
             }
@@ -34,3 +35,4 @@ def ask_ai(prompt: str, system: str = "", num_predict: int = 900) -> str:
         return response["message"]["content"]
     except Exception as e:
         return f"AI service unavailable: {e}"
+

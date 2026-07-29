@@ -32,4 +32,5 @@ def skill_gap_analyser(candidate_skills: list, required_skills: list, experience
         f"Required Minimum Experience: {min_experience} years\n\n"
         "Provide a comprehensive, actionable skill gap analysis for the recruiter."
     )
-    return ask_ai(prompt, system)
+    return ask_ai(prompt, system, num_predict=2048)
+

@@ -18,6 +18,7 @@ def talent_management_summary(name: str, role: str, department: str, tenure: str
         "#### Promotion Readiness\n"
         "For Promotion Readiness, give one clear verdict: 'Ready Now', 'Ready in 6-12 Months', "
         "or 'Not Yet Ready', followed by 2-3 sentences of reasoning based specifically on the "
-        "performance trend shown above."
+        "performance trend shown above. Ensure every section is fully completed without truncation."
     )
-    return ask_ai(prompt, system)
+    return ask_ai(prompt, system, num_predict=2048)
+

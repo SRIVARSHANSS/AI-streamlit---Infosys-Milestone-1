@@ -38,6 +38,29 @@ html, body, [class*="css"], .stMarkdown {
     font-family: 'Inter', 'Sora', sans-serif;
 }
 
+/* ─── Force all page headings to dark/black for visibility ─── */
+.stMarkdown h1,
+.stMarkdown h2,
+.stMarkdown h3,
+.stMarkdown h4,
+.stMarkdown h5,
+.stMarkdown h6,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4,
+[data-testid="stMarkdownContainer"] h5,
+[data-testid="stMarkdownContainer"] h6 {
+    color: #0f172a !important;
+    font-family: 'Sora', sans-serif !important;
+}
+
+/* Subtitle / body text — dark readable gray */
+.stMarkdown p {
+    color: #334155 !important;
+}
+
+
 /* Common SaaS style layouts */
 .header-container {
     background: linear-gradient(135deg, var(--color-bg) 0%, #1e3a8a 100%);
